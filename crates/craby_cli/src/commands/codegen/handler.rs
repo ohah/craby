@@ -1,17 +1,15 @@
 use std::path::PathBuf;
 
 use craby_codegen::{
-    constants::{cxx_mod_cls_name, GENERATED_COMMENT},
-    generator::CodeGenerator,
-    platform::{cxx, rust},
+    constants::GENERATED_COMMENT,
+    generators::{
+        android_generator::AndroidGenerator, cxx_generator::CxxGenerator,
+        ios_generator::IosGenerator, rs_generator::RsGenerator, types::GeneratorInvoker,
+    },
     types::schema::Schema,
 };
-use craby_common::{
-    config::load_config,
-    constants::{crate_dir, cxx_dir, impl_mod_name},
-    env::is_initialized,
-};
-use log::info;
+use craby_common::env::is_initialized;
+use log::{debug, info};
 
 use crate::utils::{file::write_file, schema::print_schema};
 
@@ -25,89 +23,74 @@ pub fn perform(opts: CodegenOptions) -> anyhow::Result<()> {
         anyhow::bail!("Craby project is not initialized. Please run `craby init` first.");
     }
 
-    let config = load_config(&opts.project_root)?;
-    let crate_path = crate_dir(&opts.project_root);
-    let crate_src_path = crate_path.join("src");
-    let cxx_dir = cxx_dir(&opts.project_root);
-    let cxx_mod_cls_name = cxx_mod_cls_name(&config.project.name);
-
     info!("{} module schema(s) found", opts.schemas.len());
 
-    let generator = CodeGenerator::new();
+    let mut generate_res = vec![];
     let total_mods = opts.schemas.len();
-    let mut codegen_res = vec![];
+    let generators: Vec<Box<dyn GeneratorInvoker>> = vec![
+        Box::new(AndroidGenerator::new()),
+        Box::new(IosGenerator::new()),
+        Box::new(RsGenerator::new()),
+        Box::new(CxxGenerator::new()),
+    ];
 
-    opts.schemas
+    let schemas = opts
+        .schemas
         .iter()
         .enumerate()
-        .try_for_each(|(i, schema)| -> Result<(), anyhow::Error> {
+        .map(|(i, schema)| {
             let schema = serde_json::from_str::<Schema>(&schema)?;
-            println!(
-                "Generating for {} module... ({}/{})",
+            info!(
+                "Preparing for {} module... ({}/{})",
                 schema.module_name,
                 i + 1,
                 total_mods
             );
-
-            if schema.r#type == "Component" {
-                return Err(anyhow::anyhow!("Component type is not supported"));
-            }
-
-            let res = generator.generate(&schema)?;
-
             print_schema(&schema)?;
-            write_file(
-                crate_src_path.join(format!("{}.rs", impl_mod_name(&schema.module_name))),
-                format!("{}\n", res.impl_code),
-                false,
-            )?;
+            Ok(schema)
+        })
+        .collect::<Result<Vec<Schema>, anyhow::Error>>()?;
 
-            codegen_res.push(res);
+    info!("Generating files...");
+    generators
+        .iter()
+        .try_for_each(|generator| -> Result<(), anyhow::Error> {
+            generate_res.extend(generator.invoke_generate(&opts.project_root, &schemas)?);
+            Ok(())
+        })?;
+
+    let mut wrote_cnt = 0;
+    generate_res
+        .iter()
+        .try_for_each(|res| -> Result<(), anyhow::Error> {
+            let content = with_generated_comment(&res.path, &res.content);
+            let write = write_file(&res.path, &content, res.overwrite)?;
+
+            if write {
+                wrote_cnt += 1;
+                debug!("File generated: {}", res.path.display());
+            } else {
+                debug!("Skipped writing to {}", res.path.display());
+            }
 
             Ok(())
         })?;
 
-    write_file(
-        crate_src_path.join("lib.rs"),
-        with_generated_comment(rust::template::lib_rs(&codegen_res)),
-        true,
-    )?;
-    write_file(
-        crate_src_path.join("ffi.rs"),
-        with_generated_comment(rust::template::ffi_rs(&codegen_res)),
-        true,
-    )?;
-    write_file(
-        crate_src_path.join("types.rs"),
-        with_generated_comment(rust::template::types_rs()),
-        true,
-    )?;
-    write_file(
-        crate_src_path.join("generated.rs"),
-        with_generated_comment(rust::template::generated_rs(&codegen_res)),
-        true,
-    )?;
-    write_file(
-        cxx_dir.join(format!("{}.cpp", cxx_mod_cls_name)),
-        with_generated_comment(cxx::template::mod_cxx(&codegen_res)),
-        true,
-    )?;
-    write_file(
-        cxx_dir.join(format!("{}.hpp", cxx_mod_cls_name)),
-        with_generated_comment(cxx::template::mod_cxx_h(&codegen_res)),
-        true,
-    )?;
-    write_file(
-        cxx_dir.join("bridging-generated.hpp"),
-        with_generated_comment(cxx::template::cxx_bridging_h(&codegen_res)),
-        true,
-    )?;
-
+    info!("{} files generated", wrote_cnt);
     info!("Codegen completed successfully 🎉");
 
     Ok(())
 }
 
-fn with_generated_comment(code: String) -> String {
-    format!("// {}\n{}\n", GENERATED_COMMENT, code)
+fn with_generated_comment(path: &PathBuf, code: &String) -> String {
+    match path.extension() {
+        Some(ext) => match ext.to_str().unwrap() {
+            // Source files
+            "rs" | "cpp" | "hpp" | "mm" => format!("// {}\n{}\n", GENERATED_COMMENT, code),
+            // CMakeLists.txt
+            "txt" => format!("# {}\n{}\n", GENERATED_COMMENT, code),
+            _ => format!("{}\n", code),
+        },
+        None => format!("{}\n", code),
+    }
 }
