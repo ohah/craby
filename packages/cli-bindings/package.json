@@ -1,21 +1,21 @@
 {
   "name": "@craby/cli-bindings",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "license": "MIT",
   "type": "module",
   "main": "./built/index.js",
   "types": "./built/index.d.ts",
   "exports": {
     ".": {
-      "default": "./built/index.js",
-      "types": "./built/index.d.ts"
+      "types": "./built/index.d.ts",
+      "default": "./built/index.js"
     }
   },
   "scripts": {
-    "artifacts": "napi artifacts --npm-dir npm --output-dir napi",
-    "build": "./scripts/build.sh",
     "dev": "yarn build && ./bin.js",
     "test": "vitest --run",
+    "build": "./scripts/build.sh",
+    "artifacts": "napi artifacts --npm-dir npm --output-dir napi",
     "version": "napi version"
   },
   "files": [
