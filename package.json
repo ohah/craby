@@ -5,8 +5,8 @@
     "packages/*"
   ],
   "scripts": {
-    "lint:all": "biome check packages/*",
-    "lint:fix": "biome check packages/* --write"
+    "lint:all": "biome check",
+    "lint:fix": "biome check --write"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.4",

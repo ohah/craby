@@ -259,8 +259,26 @@ jobs:
           options: -v ${{ github.workspace }}:${{ github.workspace }} -w ${{ github.workspace }} --platform ${{ steps.docker.outputs.PLATFORM }}
           run: sh -c "corepack enable && yarn workspace ${{ env.PACKAGE_NAME }} test"
 
-  typecheck:
-    name: Typecheck
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Lint (JS)
+        run: yarn lint:all
+      - name: Lint (Rust)
+        run: cargo fmt --check
+
+  build-and-typecheck:
+    name: Build and Typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -281,7 +299,8 @@ jobs:
     name: Publish packages
     runs-on: ubuntu-latest
     needs:
-      - typecheck
+      - lint
+      - build-and-typecheck
       - test-macOS-windows-binding
       - test-linux-binding
     steps:
