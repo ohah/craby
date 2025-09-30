@@ -2,8 +2,7 @@
   "name": "craby",
   "workspaces": [
     "examples/*",
-    "packages/*",
-    "template"
+    "packages/*"
   ],
   "scripts": {
     "lint:all": "biome check packages/*",

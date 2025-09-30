@@ -13075,22 +13075,3 @@ __metadata:
   checksum: 10/1a4514a734b00a37fbae7ea221cb6c7d210390b172dbe61f5e3dffa64bc8bdbf1ee672bb2e89ffbad6b57269f1582290d40b0094d7e8d51a6143c8abb2d92f47
   languageName: node
   linkType: hard
-
-"{{ pkg_name }}@workspace:template":
-  version: 0.0.0-use.local
-  resolution: "{{ pkg_name }}@workspace:template"
-  dependencies:
-    "@biomejs/biome": "npm:2.2.4"
-    "@types/react": "npm:^19.0.0"
-    craby-modules: "workspace:*"
-    crabygen: "workspace:*"
-    del-cli: "npm:^7.0.0"
-    react: "npm:19.1.1"
-    react-native: "npm:0.81.4"
-    tsdown: "npm:^0.15.5"
-    typescript: "npm:^5.9.2"
-  peerDependencies:
-    react: "*"
-    react-native: "*"
-  languageName: unknown
-  linkType: soft
