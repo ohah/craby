@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import * as mod from '../napi/index.js';
+import * as mod from '../index.js';
 
 describe('bindings', () => {
   describe('common', () => {

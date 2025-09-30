@@ -1,4 +1,4 @@
-import * as mod from '../napi/index.js';
+import * as mod from '@craby/cli-bindings';
 
 export type BindingMethod = keyof typeof mod;
 

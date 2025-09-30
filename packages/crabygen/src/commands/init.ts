@@ -1,6 +1,6 @@
 import { Command } from '@commander-js/extra-typings';
-import { getBindings } from '@craby/cli-bindings';
-import { withVerbose } from 'src/utils/command';
+import { getBindings } from '../utils/bindings';
+import { withVerbose } from '../utils/command';
 
 export const command = withVerbose(
   new Command()

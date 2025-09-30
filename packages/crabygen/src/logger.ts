@@ -1,4 +1,4 @@
-import { getBindings } from '@craby/cli-bindings';
+import { getBindings } from './utils/bindings';
 
 type Logger = {
   trace: (message: string) => void;

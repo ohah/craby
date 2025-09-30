@@ -201,4 +201,6 @@ Cargo.lock
 #!.yarn/cache
 .pnp.*
 
-packages/cli/napi/*.node
+# napi
+packages/cli-bindings/index.d.ts
+packages/cli-bindings/index.js

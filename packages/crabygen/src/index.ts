@@ -1,6 +1,6 @@
-import { getBindings } from '@craby/cli-bindings';
 import { run as runCli } from './cli';
 import { logger } from './logger';
+import { getBindings } from './utils/bindings';
 
 export async function run(baseCommand = 'crabygen') {
   const { setup } = getBindings();

@@ -3,35 +3,27 @@
   "version": "0.1.0-alpha.7",
   "license": "MIT",
   "type": "module",
-  "main": "./built/index.js",
-  "types": "./built/index.d.ts",
+  "main": "./index.js",
+  "types": "./index.d.ts",
   "exports": {
     ".": {
-      "types": "./built/index.d.ts",
-      "default": "./built/index.js"
+      "types": "./index.d.ts",
+      "default": "./index.js"
     }
   },
   "scripts": {
     "dev": "yarn build && ./bin.js",
-    "test": "vitest --run",
     "build": "./scripts/build.sh",
-    "artifacts": "napi artifacts --npm-dir npm --output-dir napi",
-    "version": "napi version"
+    "artifacts": "napi artifacts",
+    "version": "napi version",
+    "test": "vitest --run"
   },
   "files": [
-    "built",
-    "napi",
-    "!napi/*.node"
+    "index.js",
+    "index.d.ts"
   ],
-  "dependencies": {
-    "@commander-js/extra-typings": "^14.0.0",
-    "commander": "^14.0.1",
-    "es-toolkit": "^1.39.10"
-  },
   "devDependencies": {
     "@napi-rs/cli": "^3.1.5",
-    "@types/node": "^22",
-    "tsup": "^8.5.0",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   },
