@@ -2,9 +2,7 @@
   "name": "crabygen",
   "version": "0.0.0",
   "type": "module",
-  "bin": {
-    "crabygen": "./bin.js"
-  },
+  "bin": "./bin.js",
   "scripts": {
     "prepack": "yarn build",
     "typecheck": "tsc --noEmit",

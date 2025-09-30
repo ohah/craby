@@ -18,8 +18,8 @@ CxxCrabyTestModule::CxxCrabyTestModule(
     std::shared_ptr<react::CallInvoker> jsInvoker)
     : TurboModule(CxxCrabyTestModule::kModuleName, jsInvoker) {
   uintptr_t id = reinterpret_cast<uintptr_t>(this);
-  auto& registry = craby::signals::SignalManager::getInstance();
-  registry.registerDelegate(id,
+  auto& manager = craby::signals::SignalManager::getInstance();
+  manager.registerDelegate(id,
                             std::bind(&CxxCrabyTestModule::emit,
                             this,
                             std::placeholders::_1));
@@ -39,8 +39,8 @@ CxxCrabyTestModule::CxxCrabyTestModule(
 
 CxxCrabyTestModule::~CxxCrabyTestModule() {
   uintptr_t id = reinterpret_cast<uintptr_t>(this);
-  auto& registry = craby::signals::SignalManager::getInstance();
-  registry.unregisterDelegate(id);
+  auto& manager = craby::signals::SignalManager::getInstance();
+  manager.unregisterDelegate(id);
 }
 
 void CxxCrabyTestModule::emit(std::string name) {
