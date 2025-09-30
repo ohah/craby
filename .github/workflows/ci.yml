@@ -316,7 +316,7 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v5
         with:
-          path: ${{ env.PACKAGE_PATH }}/artifacts
+          path: ${{ env.PACKAGE_PATH }}/napi
       - name: Move artifacts
         run: yarn workspace ${{ env.PACKAGE_NAME }} artifacts
       - name: List packages
