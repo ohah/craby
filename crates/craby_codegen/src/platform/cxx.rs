@@ -400,27 +400,21 @@ impl Schema {
         let mut enum_bridging_templates = BTreeMap::new();
         let mut nullable_bridging_templates = self.collect_nullable_types()?;
 
-        self.aliases
-            .iter()
-            .try_for_each(|type_annotation| -> Result<(), anyhow::Error> {
-                let alias_spec = type_annotation.as_object().unwrap();
-                bridging_templates.insert(
-                    alias_spec.name.clone(),
-                    cxx_struct_bridging_template(&self.module_name, alias_spec)?,
-                );
-                Ok(())
-            })?;
+        for type_annotation in &self.aliases {
+            let alias_spec = type_annotation.as_object().unwrap();
+            bridging_templates.insert(
+                alias_spec.name.clone(),
+                cxx_struct_bridging_template(&self.module_name, alias_spec)?,
+            );
+        }
 
-        self.enums
-            .iter()
-            .try_for_each(|type_annotation| -> Result<(), anyhow::Error> {
-                let enum_spec = type_annotation.as_enum().unwrap();
-                enum_bridging_templates.insert(
-                    enum_spec.name.clone(),
-                    cxx_enum_bridging_template(enum_spec)?,
-                );
-                Ok(())
-            })?;
+        for type_annotation in &self.enums {
+            let enum_spec = type_annotation.as_enum().unwrap();
+            enum_bridging_templates.insert(
+                enum_spec.name.clone(),
+                cxx_enum_bridging_template(enum_spec)?,
+            );
+        }
 
         // C++ Templates are should be sorted in the order of their dependencies
         let ord = calc_deps_order(self)?;
@@ -455,40 +449,15 @@ impl Schema {
         // }
         let mut nullable_bridging_templates = BTreeMap::new();
 
-        self.methods
-            .iter()
-            .try_for_each(|method| -> Result<(), anyhow::Error> {
-                method
-                    .params
-                    .iter()
-                    .try_for_each(|param| -> Result<(), anyhow::Error> {
-                        if let nullable_type @ TypeAnnotation::Nullable(type_annotation) =
-                            &param.type_annotation
-                        {
-                            let key = nullable_type.as_cxx_type(&self.module_name)?;
-
-                            if nullable_bridging_templates.contains_key(&key) {
-                                return Ok(());
-                            }
-
-                            let bridging_template = cxx_nullable_bridging_template(
-                                &self.module_name,
-                                &nullable_type.as_cxx_type(&self.module_name)?,
-                                type_annotation,
-                            )?;
-
-                            nullable_bridging_templates.insert(key, bridging_template);
-                        }
-
-                        Ok(())
-                    })?;
-
-                if let nullable_type @ TypeAnnotation::Nullable(type_annotation) = &method.ret_type
+        for method in &self.methods {
+            for param in &method.params {
+                if let nullable_type @ TypeAnnotation::Nullable(type_annotation) =
+                    &param.type_annotation
                 {
                     let key = nullable_type.as_cxx_type(&self.module_name)?;
 
                     if nullable_bridging_templates.contains_key(&key) {
-                        return Ok(());
+                        continue;
                     }
 
                     let bridging_template = cxx_nullable_bridging_template(
@@ -499,41 +468,49 @@ impl Schema {
 
                     nullable_bridging_templates.insert(key, bridging_template);
                 }
+            }
 
-                Ok(())
-            })?;
+            if let nullable_type @ TypeAnnotation::Nullable(type_annotation) = &method.ret_type {
+                let key = nullable_type.as_cxx_type(&self.module_name)?;
 
-        self.aliases
-            .iter()
-            .try_for_each(|type_annotation| -> Result<(), anyhow::Error> {
-                let alias_spec = type_annotation.as_object().unwrap();
-                alias_spec
-                    .props
-                    .iter()
-                    .try_for_each(|prop| -> Result<(), anyhow::Error> {
-                        match &prop.type_annotation {
-                            nullable_type @ TypeAnnotation::Nullable(type_annotation) => {
-                                let key = nullable_type.as_cxx_type(&self.module_name)?;
+                if nullable_bridging_templates.contains_key(&key) {
+                    continue;
+                }
 
-                                if nullable_bridging_templates.contains_key(&key) {
-                                    return Ok(());
-                                }
+                let bridging_template = cxx_nullable_bridging_template(
+                    &self.module_name,
+                    &nullable_type.as_cxx_type(&self.module_name)?,
+                    type_annotation,
+                )?;
 
-                                let bridging_template = cxx_nullable_bridging_template(
-                                    &self.module_name,
-                                    &nullable_type.as_cxx_type(&self.module_name)?,
-                                    type_annotation,
-                                )?;
+                nullable_bridging_templates.insert(key, bridging_template);
+            }
+        }
 
-                                nullable_bridging_templates.insert(key, bridging_template);
+        for type_annotation in &self.aliases {
+            let alias_spec = type_annotation.as_object().unwrap();
 
-                                Ok(())
-                            }
-                            _ => Ok(()),
+            for prop in &alias_spec.props {
+                match &prop.type_annotation {
+                    nullable_type @ TypeAnnotation::Nullable(type_annotation) => {
+                        let key = nullable_type.as_cxx_type(&self.module_name)?;
+
+                        if nullable_bridging_templates.contains_key(&key) {
+                            continue;
                         }
-                    })?;
-                Ok(())
-            })?;
+
+                        let bridging_template = cxx_nullable_bridging_template(
+                            &self.module_name,
+                            &nullable_type.as_cxx_type(&self.module_name)?,
+                            type_annotation,
+                        )?;
+
+                        nullable_bridging_templates.insert(key, bridging_template);
+                    }
+                    _ => {}
+                }
+            }
+        }
 
         Ok(nullable_bridging_templates)
     }

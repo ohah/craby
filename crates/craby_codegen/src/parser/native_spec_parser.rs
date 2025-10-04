@@ -621,15 +621,15 @@ impl<'a> NativeModuleAnalyzer<'a> {
         match type_annotation {
             obj_type @ TypeAnnotation::Object(obj) => {
                 types.insert(obj_type.clone());
-                obj.props.iter().for_each(|prop| {
+                for prop in &obj.props {
                     NativeModuleAnalyzer::collect_types(
                         &prop.type_annotation,
                         scoping,
                         decls,
                         types,
                         enums,
-                    )
-                });
+                    );
+                }
             }
             enum_type @ TypeAnnotation::Enum(..) => {
                 enums.insert(enum_type.clone());

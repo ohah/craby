@@ -10,11 +10,11 @@ expression: result
 
 jint JNI_OnLoad(JavaVM *vm, void *reserved) {
   facebook::react::registerCxxModuleToGlobalModuleMap(
-      craby::crabytest::CxxCrabyTestModule::kModuleName,
-      [](std::shared_ptr<facebook::react::CallInvoker> jsInvoker) {
-        return std::make_shared<craby::crabytest::CxxCrabyTestModule>(jsInvoker);
-      });
-  return JNI_VERSION_1_6;
+    craby::crabytest::CxxCrabyTestModule::kModuleName,
+    [](std::shared_ptr<facebook::react::CallInvoker> jsInvoker) {
+      return std::make_shared<craby::crabytest::CxxCrabyTestModule>(jsInvoker);
+    });
+    return JNI_VERSION_1_6;
 }
 
 ./android/CMakeLists.txt

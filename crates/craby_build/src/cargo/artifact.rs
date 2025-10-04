@@ -81,7 +81,7 @@ impl Artifacts {
             fs::create_dir_all(&dest)?;
         }
 
-        target_artifacts.iter().try_for_each(|src| {
+        for src in target_artifacts {
             let file_name = src.file_name().unwrap();
             let ext = src.extension().unwrap().to_string_lossy().to_string();
 
@@ -98,7 +98,8 @@ impl Artifacts {
 
             debug!("Copying artifact: {:?} to {:?}", src, dest);
             fs::copy(src, dest)?;
-            Ok(())
-        })
+        }
+
+        Ok(())
     }
 }

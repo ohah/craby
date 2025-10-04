@@ -46,39 +46,39 @@ impl AndroidTemplate {
         let mut cxx_includes = vec![];
         let mut cxx_registers = vec![];
 
-        schemas.iter().for_each(|schema| {
+        for schema in schemas {
             let cxx_mod = cxx_mod_cls_name(&schema.module_name);
             let flat_name = flat_case(&schema.module_name);
 
             let cxx_namespace = format!("craby::{}::{}", flat_name, cxx_mod);
             let cxx_include = format!("#include <{cxx_mod}.hpp>");
             let cxx_register = formatdoc! {
-              r#"
-              facebook::react::registerCxxModuleToGlobalModuleMap(
+                r#"
+                facebook::react::registerCxxModuleToGlobalModuleMap(
                   {cxx_namespace}::kModuleName,
                   [](std::shared_ptr<facebook::react::CallInvoker> jsInvoker) {{
                     return std::make_shared<{cxx_namespace}>(jsInvoker);
                   }});"#,
-              cxx_namespace = cxx_namespace
+                cxx_namespace = cxx_namespace
             };
 
             cxx_includes.push(cxx_include);
             cxx_registers.push(cxx_register);
-        });
+        }
 
         let content = formatdoc! {
-          r#"
-          {cxx_includes}
+            r#"
+            {cxx_includes}
 
-          #include <jni.h>
-          #include <ReactCommon/CxxTurboModuleUtils.h>
+            #include <jni.h>
+            #include <ReactCommon/CxxTurboModuleUtils.h>
 
-          jint JNI_OnLoad(JavaVM *vm, void *reserved) {{
-          {cxx_registers}
-            return JNI_VERSION_1_6;
-          }}"#,
-          cxx_includes = cxx_includes.join("\n"),
-          cxx_registers = indent_str(cxx_registers.join("\n"), 2),
+            jint JNI_OnLoad(JavaVM *vm, void *reserved) {{
+            {cxx_registers}
+                return JNI_VERSION_1_6;
+            }}"#,
+            cxx_includes = cxx_includes.join("\n"),
+            cxx_registers = indent_str(cxx_registers.join("\n"), 2),
         };
 
         Ok(content)

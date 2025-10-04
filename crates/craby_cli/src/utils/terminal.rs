@@ -56,13 +56,7 @@ impl CodeHighlighter {
 
     pub fn highlight_code_with_box(&self, code: &str, ext: &str) {
         let lines = code.split("\n").collect::<Vec<&str>>();
-        let mut max_len = 0;
-
-        lines.iter().for_each(|line| {
-            if line.len() > max_len {
-                max_len = line.len();
-            }
-        });
+        let mut max_len = lines.iter().map(|line| line.len()).max().unwrap_or(0);
 
         max_len += 2; // For the extra padding (left, right)
 

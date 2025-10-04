@@ -412,18 +412,13 @@ impl Schema {
         }
 
         // Collect alias types (struct)
-        self.aliases
-            .iter()
-            .try_for_each(|type_annotation| -> Result<(), anyhow::Error> {
-                if struct_defs.contains_key(type_annotation) {
-                    return Ok(());
-                }
-
+        for type_annotation in &self.aliases {
+            if !struct_defs.contains_key(type_annotation) {
                 let obj = type_annotation.as_object().unwrap();
                 struct_defs.insert(type_annotation.clone(), as_struct_def(obj)?);
                 type_impls.push(alias_default_impl(obj)?);
-                Ok(())
-            })?;
+            }
+        }
 
         // Collect enum types
         let enum_defs = self
@@ -462,69 +457,12 @@ impl Schema {
         type_impls: &mut BTreeMap<String, String>,
     ) -> Result<(), anyhow::Error> {
         // Collect extern function signatures and implementations
-        self
-            .methods
-            .iter()
-            .try_for_each(|method_spec| -> Result<(), anyhow::Error> {
-                method_spec.params.iter().try_for_each(|param| -> Result<(), anyhow::Error> {
-                    // Collect nullable parameters
-                    if let nullable_type @ TypeAnnotation::Nullable(type_annotation) = &param.type_annotation
-                    {
-                        let rs_type = type_annotation.as_rs_type()?.0;
-
-                        if !type_impls.contains_key(&rs_type) {
-                            let nullable_type = nullable_type.as_rs_bridge_type()?.0;
-                            let rs_impl_type = type_annotation.as_rs_impl_type()?.0;
-                            let default_val = type_annotation.as_rs_default_val()?;
-
-                            let default_impl = formatdoc! {
-                                r#"
-                                impl Default for {nullable_type} {{
-                                    fn default() -> Self {{
-                                        {nullable_type} {{
-                                            null: true,
-                                            val: {default_val},
-                                        }}
-                                    }}
-                                }}"#,
-                                nullable_type = nullable_type,
-                                default_val = default_val,
-                            };
-
-                            let nullable_impl = formatdoc! {
-                                r#"
-                                impl From<{nullable_type}> for Nullable<{rs_impl_type}> {{
-                                    fn from(val: {nullable_type}) -> Self {{
-                                        Nullable::new(if val.null {{ None }} else {{ Some(val.val) }})
-                                    }}
-                                }}
-
-                                impl From<Nullable<{rs_impl_type}>> for {nullable_type} {{
-                                    fn from(val: Nullable<{rs_impl_type}>) -> Self {{
-                                        let val = val.into_value();
-                                        let null = val.is_none();
-                                        {nullable_type} {{
-                                            val: val.unwrap_or({default_val}),
-                                            null,
-                                        }}
-                                    }}
-                                }}"#,
-                                rs_impl_type = rs_impl_type,
-                                nullable_type = nullable_type,
-                                default_val = default_val,
-                            };
-
-                            type_impls.insert(
-                                rs_type,
-                                [default_impl, nullable_impl].join("\n\n"),
-                            );
-                        }
-                    }
-
-                    Ok(())
-                })?;
-
-                if let nullable_type @ TypeAnnotation::Nullable(type_annotation) = &method_spec.ret_type {
+        for method_spec in &self.methods {
+            for param in &method_spec.params {
+                // Collect nullable parameters
+                if let nullable_type @ TypeAnnotation::Nullable(type_annotation) =
+                    &param.type_annotation
+                {
                     let rs_type = type_annotation.as_rs_type()?.0;
 
                     if !type_impls.contains_key(&rs_type) {
@@ -569,37 +507,76 @@ impl Schema {
                             default_val = default_val,
                         };
 
-                        type_impls
-                            .insert(rs_type, [default_impl, nullable_impl].join("\n\n"));
+                        type_impls.insert(rs_type, [default_impl, nullable_impl].join("\n\n"));
                     }
                 }
+            }
 
-                Ok(())
-            })?;
+            if let nullable_type @ TypeAnnotation::Nullable(type_annotation) = &method_spec.ret_type
+            {
+                let rs_type = type_annotation.as_rs_type()?.0;
+
+                if !type_impls.contains_key(&rs_type) {
+                    let nullable_type = nullable_type.as_rs_bridge_type()?.0;
+                    let rs_impl_type = type_annotation.as_rs_impl_type()?.0;
+                    let default_val = type_annotation.as_rs_default_val()?;
+
+                    let default_impl = formatdoc! {
+                        r#"
+                        impl Default for {nullable_type} {{
+                            fn default() -> Self {{
+                                {nullable_type} {{
+                                    null: true,
+                                    val: {default_val},
+                                }}
+                            }}
+                        }}"#,
+                        nullable_type = nullable_type,
+                        default_val = default_val,
+                    };
+
+                    let nullable_impl = formatdoc! {
+                        r#"
+                        impl From<{nullable_type}> for Nullable<{rs_impl_type}> {{
+                            fn from(val: {nullable_type}) -> Self {{
+                                Nullable::new(if val.null {{ None }} else {{ Some(val.val) }})
+                            }}
+                        }}
+
+                        impl From<Nullable<{rs_impl_type}>> for {nullable_type} {{
+                            fn from(val: Nullable<{rs_impl_type}>) -> Self {{
+                                let val = val.into_value();
+                                let null = val.is_none();
+                                {nullable_type} {{
+                                    val: val.unwrap_or({default_val}),
+                                    null,
+                                }}
+                            }}
+                        }}"#,
+                        rs_impl_type = rs_impl_type,
+                        nullable_type = nullable_type,
+                        default_val = default_val,
+                    };
+
+                    type_impls.insert(rs_type, [default_impl, nullable_impl].join("\n\n"));
+                }
+            }
+        }
 
         // impl Default trait for the alias type
-        self.aliases
-            .iter()
-            .try_for_each(|type_annotation| -> Result<(), anyhow::Error> {
-                let obj = type_annotation.as_object().unwrap();
-                if type_impls.contains_key(&obj.name) {
-                    return Ok(());
-                }
+        for type_annotation in &self.aliases {
+            let obj = type_annotation.as_object().unwrap();
+            if !type_impls.contains_key(&obj.name) {
                 type_impls.insert(obj.name.clone(), alias_default_impl(obj)?);
-                Ok(())
-            })?;
+            }
+        }
 
-        // Collect enum types
-        self.enums
-            .iter()
-            .try_for_each(|type_annotation| -> Result<(), anyhow::Error> {
-                let enum_schema = type_annotation.as_enum().unwrap();
-                if type_impls.contains_key(&enum_schema.name) {
-                    return Ok(());
-                }
+        for type_annotation in &self.enums {
+            let enum_schema = type_annotation.as_enum().unwrap();
+            if !type_impls.contains_key(&enum_schema.name) {
                 type_impls.insert(enum_schema.name.clone(), enum_default_impl(enum_schema)?);
-                Ok(())
-            })?;
+            }
+        }
 
         Ok(())
     }

@@ -25,26 +25,39 @@ pub fn calc_deps_order(schema: &Schema) -> Result<Vec<String>, anyhow::Error> {
     let mut in_progress = BTreeSet::new();
     let mut result = vec![];
 
-    schema.aliases.iter().for_each(|type_annotation| {
-        dependencies.insert(type_annotation.as_object().unwrap().name.clone(), vec![]);
-    });
+    for type_annotation in &schema.aliases {
+        let alias_spec = type_annotation.as_object().unwrap();
 
-    schema
-        .aliases
-        .iter()
-        .try_for_each(|type_annotation| -> Result<(), anyhow::Error> {
-            let alias_spec = type_annotation.as_object().unwrap();
+        dependencies.insert(alias_spec.name.clone(), vec![]);
 
-            alias_spec
-                .props
-                .iter()
-                .try_for_each(|prop| -> Result<(), anyhow::Error> {
-                    match &prop.type_annotation {
+        for prop in &alias_spec.props {
+            match &prop.type_annotation {
+                TypeAnnotation::Object(ObjectTypeAnnotation {
+                    name: alias_name, ..
+                }) => {
+                    dependencies
+                        .get_mut(&alias_spec.name)
+                        .unwrap()
+                        .push(alias_name.clone());
+                }
+                TypeAnnotation::Enum(EnumTypeAnnotation {
+                    name: enum_name, ..
+                }) => {
+                    dependencies
+                        .get_mut(&alias_spec.name)
+                        .unwrap()
+                        .push(enum_name.clone());
+                }
+                nullable @ TypeAnnotation::Nullable(type_annotation) => {
+                    let rs_type = nullable.as_rs_bridge_type()?.0;
+                    dependencies.entry(rs_type.clone()).or_insert(vec![]);
+
+                    match &**type_annotation {
                         TypeAnnotation::Object(ObjectTypeAnnotation {
                             name: alias_name, ..
                         }) => {
                             dependencies
-                                .get_mut(&alias_spec.name)
+                                .get_mut(&rs_type)
                                 .unwrap()
                                 .push(alias_name.clone());
                         }
@@ -52,43 +65,17 @@ pub fn calc_deps_order(schema: &Schema) -> Result<Vec<String>, anyhow::Error> {
                             name: enum_name, ..
                         }) => {
                             dependencies
-                                .get_mut(&alias_spec.name)
+                                .get_mut(&rs_type)
                                 .unwrap()
                                 .push(enum_name.clone());
                         }
-                        nullable @ TypeAnnotation::Nullable(type_annotation) => {
-                            let rs_type = nullable.as_rs_bridge_type()?.0;
-                            dependencies.entry(rs_type.clone()).or_insert(vec![]);
-
-                            match &**type_annotation {
-                                TypeAnnotation::Object(ObjectTypeAnnotation {
-                                    name: alias_name,
-                                    ..
-                                }) => {
-                                    dependencies
-                                        .get_mut(&rs_type)
-                                        .unwrap()
-                                        .push(alias_name.clone());
-                                }
-                                TypeAnnotation::Enum(EnumTypeAnnotation {
-                                    name: enum_name,
-                                    ..
-                                }) => {
-                                    dependencies
-                                        .get_mut(&rs_type)
-                                        .unwrap()
-                                        .push(enum_name.clone());
-                                }
-                                _ => (),
-                            }
-                        }
                         _ => (),
                     }
-                    Ok(())
-                })?;
-
-            Ok(())
-        })?;
+                }
+                _ => (),
+            }
+        }
+    }
 
     fn visit(
         node: &str,

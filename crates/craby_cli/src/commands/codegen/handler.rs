@@ -74,33 +74,26 @@ pub fn perform(opts: CodegenOptions) -> anyhow::Result<()> {
     ];
 
     info!("Generating files...");
-    generators
-        .iter()
-        .try_for_each(|generator| -> Result<(), anyhow::Error> {
-            generate_res.extend(generator.invoke_generate(&ctx)?);
-            Ok(())
-        })?;
+    for generator in generators {
+        generate_res.extend(generator.invoke_generate(&ctx)?);
+    }
 
     let mut wrote_cnt = 0;
-    generate_res
-        .iter()
-        .try_for_each(|res| -> Result<(), anyhow::Error> {
-            let content = if res.overwrite {
-                with_generated_comment(&res.path, &res.content)
-            } else {
-                without_generated_comment(&res.content)
-            };
-            let write = write_file(&res.path, &content, res.overwrite)?;
+    for res in generate_res {
+        let content = if res.overwrite {
+            with_generated_comment(&res.path, &res.content)
+        } else {
+            without_generated_comment(&res.content)
+        };
+        let write = write_file(&res.path, &content, res.overwrite)?;
 
-            if write {
-                wrote_cnt += 1;
-                debug!("File generated: {}", res.path.display());
-            } else {
-                debug!("Skipped writing to {}", res.path.display());
-            }
-
-            Ok(())
-        })?;
+        if write {
+            wrote_cnt += 1;
+            debug!("File generated: {}", res.path.display());
+        } else {
+            debug!("Skipped writing to {}", res.path.display());
+        }
+    }
 
     let elapsed = start_time.elapsed().as_millis();
     info!("{} files generated", wrote_cnt);
