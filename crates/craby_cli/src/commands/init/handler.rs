@@ -13,7 +13,7 @@ use craby_common::{
     utils::string::{flat_case, kebab_case, pascal_case, snake_case},
 };
 use inquire::{validator::Validation, Text};
-use log::{info, warn};
+use log::{debug, info, warn};
 use owo_colors::OwoColorize;
 
 pub struct InitOptions {
@@ -110,6 +110,10 @@ pub fn perform(opts: InitOptions) -> anyhow::Result<()> {
 
     with_spinner("⏳ Cloning template...", |_| {
         let template_dir = clone_template()?;
+        debug!(
+            "Rendering template... ({:?} -> {:?})",
+            template_dir, dest_dir
+        );
         render_template(&dest_dir, &template_dir, &template_data)?;
         Ok(())
     })?;
@@ -123,7 +127,7 @@ pub fn perform(opts: InitOptions) -> anyhow::Result<()> {
         info!("✅ Rust project setup completed");
     } else {
         warn!(
-            "⚠️ Please install Rustup to setup the Rust project for Craby\n\nVisit the Rust website: {}",
+            "⚠️ Please install `rustup` to setup the Rust project for Craby\n\nVisit the Rust website: {}",
             "https://www.rust-lang.org/tools/install".underline()
         );
     }

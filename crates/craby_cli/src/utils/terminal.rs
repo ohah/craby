@@ -1,4 +1,7 @@
-use std::time::Duration;
+use std::{
+    process::{Command, Stdio},
+    time::Duration,
+};
 
 use indicatif::{ProgressBar, ProgressStyle};
 use syntect::{
@@ -23,6 +26,28 @@ pub fn with_spinner(
     pb.finish_and_clear();
 
     Ok(())
+}
+
+pub fn run_command(command: &str, args: &[&str], cwd: Option<&str>) -> anyhow::Result<()> {
+    let mut cmd = Command::new(command);
+
+    if let Some(cwd) = cwd {
+        cmd.current_dir(cwd);
+    }
+
+    let output = cmd
+        .args(args)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .output()?;
+
+    match output.status.code() {
+        Some(0) => Ok(()),
+        _ => anyhow::bail!(
+            "Command exited with code {}",
+            output.status.code().unwrap_or(-1)
+        ),
+    }
 }
 
 pub struct CodeHighlighter {
