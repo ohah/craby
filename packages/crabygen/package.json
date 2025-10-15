@@ -1,6 +1,7 @@
 {
   "name": "crabygen",
   "version": "0.1.0-beta.1",
+  "description": "CLI tool for Craby",
   "type": "module",
   "bin": {
     "craby": "./bin-craby.js",
