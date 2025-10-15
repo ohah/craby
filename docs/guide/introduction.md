@@ -1,9 +1,7 @@
 # Introduction
 
-:::warning
-
+::: warning
 This project is currently under development and is in early beta. For more information about the stable release, please refer to the following [link](https://github.com/leegeunhyeok/craby/issues/1)
-
 :::
 
 ## What is Craby?
@@ -52,16 +50,15 @@ Note: These benchmarks only compare native method throughput in extreme cases, a
 
 Never write boilerplate again. Craby analyzes your TypeScript specs and generates:
 
-- Rust trait definitions
+- Rust struct, trait definitions
 - C++ bridging implementations
-- FFI layer code
-- Native build configurations (e.g., CMake, XCFramework)
+- Native build configurations (e.g., CMake)
 
 ### Type Safety
 
 Craby ensures type consistency across the entire stack:
 
-- TypeScript types → Rust types → C++ types
+- TypeScript types → Rust types & C++ types
 - Compile-time validation prevents mismatched types
 - Rich type support including objects, arrays, enums, promises, and nullable types
 
@@ -72,10 +69,30 @@ With Craby, you focus on what matters—your implementation:
 ```rust
 impl CalculatorSpec for Calculator {
     fn add(&mut self, a: Number, b: Number) -> Number {
-        a + b  // Focus on what matters!
+        // Focus on what matters!
     }
 }
 ```
+
+## When to Use Craby
+
+Ideal use cases:
+
+<div class="tossface">
+
+- ✅ Performance-critical native modules (e.g., large-scale data processing, cryptographic operations, real-time parsing)
+- ✅ Building high-performance modules in Rust with type safety
+
+</div>
+
+Cannot be used for:
+
+<div class="tossface">
+
+- ❌ Modules requiring platform-specific features (e.g., camera access, sensors, native UI components)
+- ❌ Modules requiring standard TurboModule capabilities (e.g., event emitters, platform context access)
+
+</div>
 
 ## How It Works
 
@@ -102,26 +119,6 @@ graph LR
 3. **C++ Code Generation**: Generate pure C++ TurboModule implementations and templates for efficient data interoperability
 4. **Integration**: When the React Native application builds, the C++ TurboModule is compiled and integrated into the app
 
-## When to Use Craby
-
-Ideal use cases:
-
-<div class="tossface">
-
-- ✅ Performance-critical native modules (e.g., large-scale data processing, cryptographic operations, real-time parsing)
-- ✅ Building high-performance modules in Rust with type safety
-
-</div>
-
-Cannot be used for:
-
-<div class="tossface">
-
-- ❌ Modules requiring platform-specific features (e.g., camera access, sensors, native UI components)
-- ❌ Modules requiring standard TurboModule capabilities (e.g., event emitters, platform context access)
-
-</div>
-
 ## Next Steps
 
-Ready to get started? Head over to the [Getting Started](/guide/getting-started) guide to create your first Craby module!
+Ready to get started? Head over to the [Create a Project](/guide/getting-started) guide to create your first Craby module!

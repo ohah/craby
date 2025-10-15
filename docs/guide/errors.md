@@ -27,7 +27,7 @@ Panic occurred → `std::panic::catch_unwind()` → C++ Exception → `jsi::JSEr
 impl CalculatorSpec for Calculator {
     fn divide(&mut self, a: Number, b: Number) -> Number {
         if b == 0.0 {
-            throw!("Division by zero");  // Throws to JavaScript!
+            throw!("Division by zero"); // Throws to JavaScript!
         }
         a / b
     }

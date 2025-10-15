@@ -20,8 +20,6 @@ Certain standard TurboModule capabilities are not supported:
 - Native module lifecycle callbacks
 - Direct access to React Native bridge APIs
 
-:::info
-
+::: info
 Craby provides [Signals](/guide/signals) as an alternative for one-way native-to-JavaScript event notifications. While Signals don't carry data payloads, they enable triggering callbacks from Rust to JavaScript.
-
 :::

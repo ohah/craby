@@ -20,10 +20,8 @@ import type { NativeModule, Signal } from 'craby-modules';
 
 export interface Spec extends NativeModule {
   // Signal definitions
-  onDataReceived: Signal;
-  onProgress: Signal;
-  onError: Signal;
-  onComplete: Signal;
+  onStarted: Signal;
+  onFinished: Signal;
 
   // Regular methods
   startProcess(): void;
@@ -32,9 +30,7 @@ export interface Spec extends NativeModule {
 ```
 
 ::: info Signal Names
-
 The property name (e.g., `onDataReceived`) becomes the signal name. Use descriptive names that clearly indicate when the signal is emitted.
-
 :::
 
 ## Emitting Signals from Rust
@@ -45,13 +41,13 @@ In your Rust implementation, emit signals using the `emit()` method:
 impl MyModuleSpec for MyModule {
     fn start_process(&mut self) -> Void {
         // Emit a signal to notify JavaScript
-        self.emit(MyModuleSignal::OnProgress);
+        self.emit(MyModuleSignal::OnStarted);
 
         // Do some work...
         process_data();
 
         // Emit completion signal
-        self.emit(MyModuleSignal::OnComplete);
+        self.emit(MyModuleSignal::OnFinished);
     }
 }
 ```
@@ -62,11 +58,9 @@ Craby automatically generates a Signal enum for your module:
 
 ```rust
 // Auto-generated
-pub enum MyModuleSignal {
-    OnDataReceived,
-    OnProgress,
-    OnError,
-    OnComplete,
+pub enum ProcessModuleSignal {
+    OnStarted,
+    OnFinished,
 }
 ```
 
@@ -75,10 +69,10 @@ pub enum MyModuleSignal {
 Subscribe to signals to invoke with callback:
 
 ```typescript
-import { MyModule } from 'your-module';
+import { ProcessModule } from 'your-module';
 
 // Add a listener
-const cleanup = MyModule.onDataReceived(() => {
+const cleanup = ProcessModule.onStarted(() => {
   console.log('Callback invoked from native!');
 });
 
@@ -91,12 +85,12 @@ cleanup();
 You can add multiple listeners to the same signal:
 
 ```typescript
-MyModule.onProgress(() => {
-  console.log('Progress update 1');
+MyModule.onFinished(() => {
+  console.log('Finished 1');
 });
 
-MyModule.onProgress(() => {
-  console.log('Progress update 2');
+MyModule.onFinished(() => {
+  console.log('Finished 2');
 });
 
 // Both listeners will be called when the signal is emitted

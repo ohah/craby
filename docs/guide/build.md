@@ -11,11 +11,9 @@ After implementing your module in Rust, you need to compile it into native binar
 The simplest way to build for all supported platforms:
 
 ::: info
-
 Before building, Craby verifies that the generated code matches the current module specifications.
 
 If they don't match, you won't be able to build and you'll need to run the `codegen` command to update the generated code.
-
 :::
 
 ```bash
@@ -39,9 +37,7 @@ By default, this builds for:
 
 
 ::: info
-
 The simulator target libraries (`ios-arm64-simulator` and `ios-x86_64-simulator`) are merged into a single universal binary (`ios-arm64_x86_64-simulator`) using `lipo` command line tool.
-
 :::
 
 **iOS**
@@ -52,6 +48,14 @@ The simulator target libraries (`ios-arm64-simulator` and `ios-x86_64-simulator`
 | armeabi-v7a | `armv7-linux-androideabi` | 32-bit ARM devices (older phones) |
 | x86_64 | `x86_64-linux-android` | 64-bit x86 emulator |
 | x86 | `i686-linux-android` | 32-bit x86 emulator |
+
+::: tip Clean Build
+If you encounter build issues or want to start fresh, you can remove all build artifacts and caches:
+
+```bash
+npx crabygen clean
+```
+:::
 
 ## Setup scripts for publishing Craby modules
 
@@ -97,17 +101,3 @@ android/src/main/libs/
 └── x86_64/
     └── libmodule-prebuilt.a
 ```
-
-## Cleaning Build Artifacts
-
-Remove all build artifacts and caches:
-
-```bash
-npx crabygen clean
-```
-
-This removes:
-
-- `target` directory (Rust build artifacts)
-- Generated binaries in `android` and `ios`
-- Build caches

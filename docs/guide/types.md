@@ -19,10 +19,8 @@ Craby automatically converts types between TypeScript, Rust, and C++ at compile-
 | `void` | `()` | `void` |
 
 ::: info
-
 - **Object types** are generated as structs matching your TypeScript schema
 - **Nullable types** are generated using a pre-defined struct
-
 :::
 
 **Type Aliases**
@@ -37,7 +35,6 @@ Craby provides type aliases to make Rust types more familiar to TypeScript devel
 | `std::vec::Vec<T>` | `Array<T>` |
 | `std::result::Result<T, anyhow::Error>` | `Promise<T>` |
 | `()` | `Void` |
-
 
 ## Number
 
@@ -92,7 +89,7 @@ export interface Spec extends NativeModule {
 ```rust
 impl ValidatorSpec for Validator {
     fn is_valid(&mut self, value: Boolean) -> Boolean {
-        !value  // Negate the boolean
+        !value
     }
 }
 ```
@@ -193,20 +190,20 @@ impl ArrayProcessorSpec for ArrayProcessor {
 
 ```rust
 // Iterate over array
-fn process(&mut self, items: Array<String>) -> Void {
+fn foo(&mut self, items: Array<String>) -> Void {
     for item in items.iter() {
-        println!("{}", item);
+       // ...
     }
 }
 
 // Modify in place
-fn double(&mut self, mut numbers: Array<Number>) -> Array<Number> {
+fn bar(&mut self, mut numbers: Array<Number>) -> Array<Number> {
     numbers.iter_mut().for_each(|x| *x *= 2.0);
     numbers
 }
 
 // Create new array
-fn generate(&mut self, count: Number) -> Array<Number> {
+fn baz(&mut self, count: Number) -> Array<Number> {
     (0..count as i32).map(|x| x as f64).collect()
 }
 ```
@@ -243,66 +240,24 @@ impl UserServiceSpec for UserService {
 }
 ```
 
-### Nullable API
+### Nullable methods
 
 ```rust
 // Create nullable values
 let some_value = Nullable::<Number>::some(42.0);
-let no_value = Nullable::<Number>::none();
+let none_value = Nullable::<Number>::none();
 
-// Check if value exists
-if name.is_some() {
-    // ...
-}
+// Get the value as Option<&T>
+some_value.value_of(); // Some(&42.0)
+none_value.value_of(); // None
 
-// Get value as Option
-match name.value_of() {
-    Some(val) => println!("{}", val),
-    None => println!("No value"),
-}
-
-// Unwrap (panics if None)
-let value = name.unwrap();
+// Set a new value
+none_value.value(123.0);
 ```
 
 ## Enums
 
-Craby supports both string and numeric enums.
-
-### String Enums
-
-**TypeScript:**
-```typescript
-export enum Status {
-  Active = 'active',
-  Inactive = 'inactive',
-  Pending = 'pending',
-}
-
-export interface Spec extends NativeModule {
-  getStatus(status: Status): string;
-}
-```
-
-**Generated Rust:**
-```rust
-pub enum Status {
-    Active,
-    Inactive,
-    Pending,
-}
-
-impl StatusCheckerSpec for StatusChecker {
-    fn get_status(&mut self, status: Status) -> String {
-        match status {
-            Status::Active => "Currently active".to_string(),
-            Status::Inactive => "Not active".to_string(),
-            Status::Pending => "Waiting".to_string(),
-            _ => unreachable!(),
-        }
-    }
-}
-```
+Craby supports both numeric and string enums.
 
 ### Numeric Enums
 
@@ -333,6 +288,41 @@ impl TaskManagerSpec for TaskManager {
             Priority::Low => println!("Low priority"),
             Priority::Medium => println!("Medium priority"),
             Priority::High => println!("High priority"),
+            _ => unreachable!(),
+        }
+    }
+}
+```
+
+### String Enums
+
+**TypeScript:**
+```typescript
+export enum Status {
+  Active = 'active',
+  Inactive = 'inactive',
+  Pending = 'pending',
+}
+
+export interface Spec extends NativeModule {
+  getStatus(status: Status): string;
+}
+```
+
+**Generated Rust:**
+```rust
+pub enum Status {
+    Active,
+    Inactive,
+    Pending,
+}
+
+impl StatusCheckerSpec for StatusChecker {
+    fn get_status(&mut self, status: Status) -> String {
+        match status {
+            Status::Active => "Currently active".to_string(),
+            Status::Inactive => "Not active".to_string(),
+            Status::Pending => "Waiting".to_string(),
             _ => unreachable!(),
         }
     }

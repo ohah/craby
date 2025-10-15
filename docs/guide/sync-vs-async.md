@@ -166,10 +166,8 @@ try {
 
 Async methods use `promise::reject` utility function for errors:
 
-::: info
-
+::: tip
 You can also use the `throw!` macro in async methods for error handling
-
 :::
 
 ```rust

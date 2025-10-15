@@ -1,11 +1,5 @@
 # Getting Started
 
-:::warning
-
-This project is currently under development and is in early beta. For more information about the stable release, please refer to the following [link](https://github.com/leegeunhyeok/craby/issues/1)
-
-:::
-
 This guide will walk you through creating your first Craby module from scratch.
 
 ## Compatibility
@@ -17,9 +11,7 @@ Craby-built modules require a minimum React Native version of:
 ## Prerequisites
 
 ::: warning macOS Required
-
-Craby development requires **macOS** with **Xcode 12 or higher** for building [*-apple-ios](https://doc.rust-lang.org/rustc/platform-support/apple-ios.html) targets.
-
+Craby development requires **macOS** with **Xcode 12 or higher** for building [\*-apple-ios](https://doc.rust-lang.org/rustc/platform-support/apple-ios.html) targets.
 :::
 
 Before you begin, make sure you have the following installed:
@@ -35,16 +27,6 @@ Before you begin, make sure you have the following installed:
 export ANDROID_NDK_HOME=/path/to/android-ndk
 ```
 
-::: info
-
-You can use the `doctor` command to verify that all requirements are met.
-
-```bash
-npx crabygen doctor
-```
-
-:::
-
 ## Create a Project
 
 You have two options for getting started with Craby: scaffolding a new module or adding it manually to an existing project.
@@ -59,6 +41,7 @@ cd <module-name>
 ```
 
 This will create a complete module structure with:
+
 - Rust workspace configuration
 - Native build setup (Android/iOS)
 - Package configuration
@@ -122,14 +105,20 @@ your-module/
 
 Let's create a simple calculator module to understand the Craby workflow.
 
+::: tip
+You can use the `doctor` command to verify that all requirements are met.
+
+```bash
+npx crabygen doctor
+```
+:::
+
 ### Step 1: Define the TypeScript Spec
 
 Create `src/NativeCalculator.ts`:
 
-::: info
-
-Module spec files must start with the "Native" prefix.
-
+::: warning
+Spec files **must** be prefixed with `Native` (e.g., `NativeCalculator.ts`) to be recognized by the code generator.
 :::
 
 ```typescript
@@ -146,11 +135,7 @@ export interface Spec extends NativeModule {
 export default NativeModuleRegistry.getEnforcing<Spec>('Calculator');
 ```
 
-Export your module in `src/index.ts`:
-
-```typescript
-export { default as Calculator } from './NativeCalculator';
-```
+See [Module Definition](/guide/module-definition) for more details.
 
 ### Step 2: Generate Code
 
@@ -231,15 +216,16 @@ Now you can use your module in your React Native app:
 ```typescript
 import { Calculator } from 'your-module';
 
-const sum = Calculator.add(10, 5); // 15
-const difference = Calculator.subtract(10, 5); // 5
-const product = Calculator.multiply(10, 5); // 50
-const quotient = Calculator.divide(10, 5); // 2
+Calculator.add(10, 5); // 15
+Calculator.subtract(10, 5); // 5
+Calculator.multiply(10, 5); // 50
+Calculator.divide(10, 5); // 2
 ```
 
 ## Next Steps
 
 Now that you've created your first module, explore:
 
+- [Configuration](/guide/configuration) - Learn about Craby configuration
 - [Module Definition](/guide/module-definition) - Learn about module specs and types
-- [How to Build](/guide/build) - Build native binaries
+- [How to Build](/guide/build) - Build native binaries and packaging

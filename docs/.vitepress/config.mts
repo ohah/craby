@@ -23,6 +23,7 @@ export default withMermaid(
           items: [
             { text: 'Introduction', link: '/guide/introduction' },
             { text: 'Create a Project', link: '/guide/getting-started' },
+            { text: 'Configuration', link: '/guide/configuration' },
             { text: 'Module Definition', link: '/guide/module-definition' },
             { text: 'How to Build', link: '/guide/build' },
             { text: 'CLI Commands', link: '/guide/cli-commands' },
@@ -35,6 +36,7 @@ export default withMermaid(
             { text: 'Signals', link: '/guide/signals' },
             { text: 'Errors', link: '/guide/errors' },
             { text: 'Sync vs Async', link: '/guide/sync-vs-async' },
+            { text: 'Stateful Modules', link: '/guide/stateful-modules' },
           ],
         },
         {

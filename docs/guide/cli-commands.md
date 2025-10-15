@@ -11,9 +11,7 @@ npx crabygen <command> [options]
 ```
 
 ::: info
-
 You can also use the `craby` command instead of `crabygen` (they are aliases).
-
 :::
 
 ## `init`

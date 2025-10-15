@@ -2,15 +2,13 @@
 
 This guide explains how to define your native module using TypeScript specs.
 
-## Basic Module Structure
+## Module Structure
 
 ::: info
-
-Module spec files must start with the "Native" prefix.
-
+Craby scans the source directory specified in your [configuration](/guide/configuration) for spec files prefixed with `Native` (e.g., `NativeCalculator.ts`). Only files matching this pattern will be processed by the code generator.
 :::
 
-Every Craby module starts with a TypeScript spec that extends `NativeModule`:
+Every Craby module starts with a TypeScript spec that extends `NativeModule` interface:
 
 ```typescript
 // NativeMyModule.ts
@@ -18,7 +16,6 @@ import type { NativeModule } from 'craby-modules';
 import { NativeModuleRegistry } from 'craby-modules';
 
 export interface Spec extends NativeModule {
-  // Your methods here
   add(a: number, b: number): number;
   greet(name: string): string;
 }
@@ -26,10 +23,19 @@ export interface Spec extends NativeModule {
 export default NativeModuleRegistry.getEnforcing<Spec>('MyModule');
 ```
 
-### Module Registration
+### Getting Module Instances
 
-- `NativeModule` - Base interface for all Craby modules
-- `NativeModuleRegistry.getEnforcing<Spec>()` - Get your module instance
+Craby provides two methods to get module instances:
+
+```typescript
+import { NativeModuleRegistry } from 'craby-modules';
+
+NativeModuleRegistry.getEnforcing<Spec>('MyModule');
+NativeModuleRegistry.get<Spec>('MyModule');
+```
+
+- `getEnforcing` - Returns the module instance. Throws an error if the module is not found (e.g., not linked).
+- `get` - Returns the module instance if found, or `null` if the module doesn't exist.
 
 ## Defining Methods
 
@@ -53,24 +59,10 @@ export interface Spec extends NativeModule {
 You can define custom types using TypeScript interfaces:
 
 ```typescript
-export interface User {
-  name: string;
-  age: number;
-  email: string;
-}
-```
-
-## Type Aliases
-
-Use type aliases for better code organization:
-
-```typescript
-export type UserId = number;
-export type Timestamp = number;
-
-export interface User {
-  id: UserId;
-  createdAt: Timestamp;
+export interface Something {
+  foo: string;
+  bar: number;
+  baz: string;
 }
 ```
 
@@ -81,7 +73,7 @@ When you run `crabygen` command, Craby generates Rust code from your TypeScript 
 ### Generated Rust Trait
 
 ```rust
-// Auto-generated from TypeScript spec
+// Auto-generated from TypeScript module spec
 pub trait MyModuleSpec {
     fn square(&mut self, n: Number) -> Number;
     fn calculate_prime(&mut self, n: Number) -> Promise<User>;
@@ -100,9 +92,7 @@ pub struct User {
 }
 ```
 
-### Your Implementation
-
-You implement the generated trait:
+You just implement the generated trait!
 
 ```rust
 impl MyModuleSpec for MyModule {
@@ -119,32 +109,6 @@ impl MyModuleSpec for MyModule {
         Something::default()
     }
 }
-```
-
-## Stateful Modules
-
-Modules can maintain state across method calls. Each module instance preserves its internal Rust state between invocations:
-
-```rust
-struct Storage {
-    id: usize,
-    data: Option<Number>,
-}
-
-impl StorageSpec for Storage {
-    fn set_data(&mut self, data: Number) -> Void {
-        self.data = Some(data);
-    }
-
-    fn get_data(&mut self) -> Number {
-        self.data.unwrap_or(0.0)
-    }
-}
-```
-
-```typescript
-Storage.setData(123);
-Storage.getData(); // 123
 ```
 
 ## Supported Types
