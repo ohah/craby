@@ -22,6 +22,9 @@
     "typecheck": "tsc --noEmit",
     "build": "tsdown"
   },
+  "dependencies": {
+    "es-toolkit": "^1.40.0"
+  },
   "devDependencies": {
     "@types/react": "^19.1.0",
     "craby-test": "workspace:*",

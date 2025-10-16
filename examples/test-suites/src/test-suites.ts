@@ -1,6 +1,7 @@
 import * as Module from 'craby-test';
+import { assert } from 'es-toolkit';
 import type { TestSuite } from './types';
-import { toErrorObject } from './utils';
+import { createTaskHandler, nextTick, toErrorObject } from './utils';
 
 const TEST_SUITES: TestSuite[] = [
   {
@@ -38,7 +39,7 @@ const TEST_SUITES: TestSuite[] = [
     action: () => {
       try {
         return Module.CrabyTestModule.objectMethod({ foo: 123 } as any);
-      } catch (error: any) {
+      } catch (error: unknown) {
         return toErrorObject(error);
       }
     },
@@ -57,7 +58,7 @@ const TEST_SUITES: TestSuite[] = [
           PascalCase: 0,
           snake_case: 0,
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         return toErrorObject(error);
       }
     },
@@ -80,7 +81,7 @@ const TEST_SUITES: TestSuite[] = [
           PascalCase: 0,
           snake_case: 0,
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         return toErrorObject(error);
       }
     },
@@ -143,11 +144,13 @@ const TEST_SUITES: TestSuite[] = [
     label: 'State',
     action: () => {
       const data = Date.now();
+
       Module.CrabyTestModule.setState(data);
-      return {
-        data,
-        state: Module.CrabyTestModule.getState(),
-      };
+
+      const state = Module.CrabyTestModule.getState();
+      assert(state === data, '`getState` result is incorrect');
+
+      return { data, state };
     },
   },
   {
@@ -155,7 +158,7 @@ const TEST_SUITES: TestSuite[] = [
     action: () => {
       try {
         return Module.CalculatorModule.divide(10, 0);
-      } catch (error: any) {
+      } catch (error: unknown) {
         return toErrorObject(error);
       }
     },
@@ -167,21 +170,75 @@ const TEST_SUITES: TestSuite[] = [
   },
   {
     label: 'Signal',
-    action: () => {
-      const promise = new Promise<string>((resolve, reject) => {
-        try {
-          const cleanup = Module.CrabyTestModule.onSignal(() => {
-            cleanup();
-            resolve('Signal received');
-          });
-        } catch (error) {
-          reject(error);
+    action: async () => {
+      let invoked = 0;
+      const TRIGGER_COUNT = 3;
+      const task = createTaskHandler<object>();
+
+      const cleanup = Module.CrabyTestModule.onSignal(() => {
+        ++invoked;
+      });
+
+      for (let i = 0; i < TRIGGER_COUNT; i++) {
+        Module.CrabyTestModule.triggerSignal();
+      }
+
+      cleanup();
+
+      // 4th trigger after the cleanup is called
+      Module.CrabyTestModule.triggerSignal();
+
+      nextTick(() => {
+        if (invoked === TRIGGER_COUNT) {
+          task.resolver({ invoked });
+        } else {
+          task.rejector(new Error(`Expected callback to be called ${TRIGGER_COUNT} times, got ${invoked}`));
         }
       });
 
+      return task;
+    },
+  },
+  {
+    label: 'Signal',
+    description: 'Multiple listeners',
+    action: async () => {
+      let invoked = 0;
+      const LISTENER_COUNT = 3;
+      const TRIGGER_COUNT = 3;
+      const task = createTaskHandler<object>();
+
+      const cleanupFunctions = Array.from({ length: LISTENER_COUNT }, () => {
+        return Module.CrabyTestModule.onSignal(() => {
+          ++invoked;
+        });
+      });
+
+      const cleanup = () => {
+        cleanupFunctions.forEach((cleanup) => {
+          cleanup();
+        });
+      };
+
+      for (let i = 0; i < TRIGGER_COUNT; i++) {
+        Module.CrabyTestModule.triggerSignal();
+      }
+
+      cleanup();
+
+      // 4th trigger after the cleanup is called
       Module.CrabyTestModule.triggerSignal();
 
-      return promise;
+      nextTick(() => {
+        const expected = TRIGGER_COUNT * LISTENER_COUNT;
+        if (invoked === expected) {
+          task.resolver({ invoked });
+        } else {
+          task.rejector(new Error(`Expected callback to be called ${expected} times, got ${invoked}`));
+        }
+      });
+
+      return task;
     },
   },
   {
@@ -191,50 +248,52 @@ const TEST_SUITES: TestSuite[] = [
       const a = 5;
       const b = 10;
 
-      return {
-        add: Module.CalculatorModule.add(a, b),
-        subtract: Module.CalculatorModule.subtract(a, b),
-        multiply: Module.CalculatorModule.multiply(a, b),
-        divide: Module.CalculatorModule.divide(a, b),
-      };
+      const add = Module.CalculatorModule.add(a, b);
+      const subtract = Module.CalculatorModule.subtract(a, b);
+      const multiply = Module.CalculatorModule.multiply(a, b);
+      const divide = Module.CalculatorModule.divide(a, b);
+
+      assert(add === a + b, '`add` result is incorrect');
+      assert(subtract === a - b, '`subtract` result is incorrect');
+      assert(multiply === a * b, '`multiply` result is incorrect');
+      assert(divide === a / b, '`divide` result is incorrect');
+
+      return { add, subtract, multiply, divide };
     },
   },
   {
     label: 'Conventions',
     action: () => {
-      let camelMethod = false;
-      let pascalMethod = false;
-      let snakeMethod = false;
+      type MethodResult = { invoked: boolean; typeof: null | string };
+
+      let camelMethod: MethodResult = { invoked: false, typeof: null };
+      let pascalMethod: MethodResult = { invoked: false, typeof: null };
+      let snakeMethod: MethodResult = { invoked: false, typeof: null };
 
       try {
         Module.CrabyTestModule.camelMethod();
-        camelMethod = true;
+        camelMethod = { invoked: true, typeof: typeof Module.CrabyTestModule.camelMethod };
       } catch {}
 
       try {
         Module.CrabyTestModule.PascalMethod();
-        pascalMethod = true;
+        pascalMethod = { invoked: true, typeof: typeof Module.CrabyTestModule.PascalMethod };
       } catch {}
 
       try {
         Module.CrabyTestModule.snake_method();
-        snakeMethod = true;
+        snakeMethod = { invoked: true, typeof: typeof Module.CrabyTestModule.snake_method };
       } catch {}
 
-      return {
-        camelMethod: {
-          typeof: typeof Module.CrabyTestModule.camelMethod,
-          invoked: camelMethod,
-        },
-        PascalMethod: {
-          typeof: typeof Module.CrabyTestModule.PascalMethod,
-          invoked: pascalMethod,
-        },
-        snake_method: {
-          typeof: typeof Module.CrabyTestModule.snake_method,
-          invoked: snakeMethod,
-        },
-      };
+      assert(camelMethod.invoked, '`camelMethod` is not invoked');
+      assert(pascalMethod.invoked, '`PascalMethod` is not invoked');
+      assert(snakeMethod.invoked, '`snake_method` is not invoked');
+
+      assert(camelMethod.typeof === 'function', '`camelMethod` is not a function');
+      assert(pascalMethod.typeof === 'function', '`PascalMethod` is not a function');
+      assert(snakeMethod.typeof === 'function', '`snake_method` is not a function');
+
+      return { camelMethod, PascalMethod: pascalMethod, snake_method: snakeMethod };
     },
   },
 ];
