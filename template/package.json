@@ -69,7 +69,7 @@
     "crabygen": "*",
     "react": "19.1.1",
     "react-native": "0.82.1",
-    "tsdown": "^0.15.9",
+    "tsdown": "^0.15.10",
     "typescript": "^5.9.3"
   },
   "peerDependencies": {

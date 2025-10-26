@@ -40,8 +40,8 @@
     "@arethetypeswrong/core": "^0.18.2",
     "react": "^19.1.1",
     "react-native": "^0.81.4",
-    "tsdown": "^0.15.9",
-    "typescript": "^5.9.2"
+    "tsdown": "^0.15.10",
+    "typescript": "^5.9.3"
   },
   "peerDependencies": {
     "react-native": ">=0.76.0"
