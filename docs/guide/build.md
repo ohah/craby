@@ -27,7 +27,7 @@ npx craby build
 
 By default, this builds for:
 
-**Android**
+**iOS**
 
 | Identifier | Target | Description |
 |-------------|--------|-------------|
@@ -40,7 +40,7 @@ By default, this builds for:
 The simulator target libraries (`ios-arm64-simulator` and `ios-x86_64-simulator`) are merged into a single universal binary (`ios-arm64_x86_64-simulator`) using `lipo` command line tool.
 :::
 
-**iOS**
+**Android**
 
 | ABI | Target | Description |
 |-------------|--------|-------------|
