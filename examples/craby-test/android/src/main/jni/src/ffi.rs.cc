@@ -1221,6 +1221,16 @@ void craby$crabytest$signals$cxxbridge1$SignalManager$emit(::craby::crabytest::s
   (self.*emit$)(id, name);
 }
 
+void craby$crabytest$signals$cxxbridge1$SignalManager$emit_array_number(::craby::crabytest::signals::SignalManager const &self, ::std::size_t id, ::rust::Str name, ::rust::Slice<double const> arr) noexcept {
+  void (::craby::crabytest::signals::SignalManager::*emit_array_number$)(::std::size_t, ::rust::Str, ::rust::Slice<double const>) const = &::craby::crabytest::signals::SignalManager::emit_array_number;
+  (self.*emit_array_number$)(id, name, arr);
+}
+
+void craby$crabytest$signals$cxxbridge1$SignalManager$emit_array_string(::craby::crabytest::signals::SignalManager const &self, ::std::size_t id, ::rust::Str name, ::rust::Slice<::rust::Str const> arr) noexcept {
+  void (::craby::crabytest::signals::SignalManager::*emit_array_string$)(::std::size_t, ::rust::Str, ::rust::Slice<::rust::Str const>) const = &::craby::crabytest::signals::SignalManager::emit_array_string;
+  (self.*emit_array_string$)(id, name, arr);
+}
+
 ::craby::crabytest::signals::SignalManager const *craby$crabytest$signals$cxxbridge1$get_signal_manager() noexcept {
   ::craby::crabytest::signals::SignalManager const &(*get_signal_manager$)() = ::craby::crabytest::signals::getSignalManager;
   return &get_signal_manager$();
