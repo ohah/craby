@@ -334,10 +334,17 @@ impl Param {
     /// items: Vec<MyStruct>
     /// ```
     pub fn try_into_cxx_sig(&self) -> Result<String, anyhow::Error> {
-        let param_type = if let TypeAnnotation::String = &self.type_annotation {
-            "&str".to_string()
-        } else {
-            self.type_annotation.as_rs_type()?.into_code()
+        let param_type = match &self.type_annotation {
+            TypeAnnotation::String => "&str".to_string(),
+            TypeAnnotation::Nullable(type_annotation) => {
+                // nullable string의 경우 NullableString 구조체 사용
+                if let TypeAnnotation::String = &**type_annotation {
+                    "NullableString".to_string()
+                } else {
+                    self.type_annotation.as_rs_type()?.into_code()
+                }
+            }
+            _ => self.type_annotation.as_rs_type()?.into_code(),
         };
         Ok(format!("{}: {}", snake_case(&self.name), param_type))
     }
