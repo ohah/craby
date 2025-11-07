@@ -1,3 +1,4 @@
 [tools]
 node = "22.15.1"
 rust = "nightly-2025-09-22"
+yarn = "4.10.3"
