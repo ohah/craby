@@ -278,6 +278,82 @@ const TEST_SUITES: TestSuite[] = [
     },
   },
   {
+    label: 'Signal',
+    description: 'Array<number> data',
+    action: async () => {
+      const receivedData: (number[] | undefined)[] = [];
+      const task = createTaskHandler<object>();
+
+      const cleanup = Module.CrabyTestModule.onSignal<number[]>((data) => {
+        console.log('Array<number> data', data);
+        receivedData.push(data);
+      });
+
+      Module.CrabyTestModule.triggerSignal();
+
+      cleanup();
+
+      nextTick(() => {
+        // trigger_signal은 3개의 시그널을 emit: 기본, Array<number>, Array<string>
+        // Array<number>는 두 번째로 emit되므로 receivedData[1]에 있을 것
+        const arrayNumberData = receivedData.find(
+          (data) => Array.isArray(data) && typeof data[0] === 'number',
+        );
+        if (arrayNumberData && arrayNumberData.length === 5) {
+          task.resolver({ receivedData: arrayNumberData });
+        } else {
+          task.rejector(
+            new Error(
+              `Expected array with 5 number elements, got ${JSON.stringify(receivedData)}`,
+            ),
+          );
+        }
+      });
+
+      return task;
+    },
+  },
+  {
+    label: 'Signal',
+    description: 'Array<string> data',
+    action: async () => {
+      const receivedData: (string[] | undefined)[] = [];
+      const task = createTaskHandler<object>();
+
+      const cleanup = Module.CrabyTestModule.onSignal<string[]>((data) => {
+        console.log('Array<string> data', data);
+        receivedData.push(data);
+      });
+
+      Module.CrabyTestModule.triggerSignal();
+
+      cleanup();
+
+      nextTick(() => {
+        // trigger_signal은 3개의 시그널을 emit: 기본, Array<number>, Array<string>
+        // Array<string>는 세 번째로 emit되므로 receivedData[2]에 있을 것
+        const arrayStringData = receivedData.find(
+          (data) => Array.isArray(data) && typeof data[0] === 'string',
+        );
+        if (
+          arrayStringData &&
+          arrayStringData.length === 4 &&
+          arrayStringData[0] === 'hello'
+        ) {
+          task.resolver({ receivedData: arrayStringData });
+        } else {
+          task.rejector(
+            new Error(
+              `Expected array with 4 string elements, got ${JSON.stringify(receivedData)}`,
+            ),
+          );
+        }
+      });
+
+      return task;
+    },
+  },
+  {
     label: 'Multiple TurboModules',
     description: 'Calculator',
     action: () => {
