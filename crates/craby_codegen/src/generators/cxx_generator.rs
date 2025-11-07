@@ -193,7 +193,20 @@ impl CxxTemplate {
                 manager.registerDelegate(id,
                                          std::bind(&{cxx_mod}::emit,
                                          this,
-                                         std::placeholders::_1));"#,
+                                         std::placeholders::_1));
+                manager.registerDelegateWithValue(id,
+                                                  std::bind(&{cxx_mod}::emit,
+                                                  this,
+                                                  std::placeholders::_1,
+                                                  std::placeholders::_2),
+                                                  std::bind(&{cxx_mod}::emitArrayNumber,
+                                                  this,
+                                                  std::placeholders::_1,
+                                                  std::placeholders::_2),
+                                                  std::bind(&{cxx_mod}::emitArrayString,
+                                                  this,
+                                                  std::placeholders::_1,
+                                                  std::placeholders::_2));"#,
             };
 
             let unregister_stmt = formatdoc! {
@@ -281,6 +294,9 @@ impl CxxTemplate {
             }
 
             method_defs.insert(0, "void emit(std::string name);".to_string());
+            method_defs.insert(1, "void emit(std::string name, const facebook::jsi::Value& data);".to_string());
+            method_defs.insert(2, "void emitArrayNumber(std::string name, const rust::Vec<double>& arr);".to_string());
+            method_defs.insert(3, "void emitArrayString(std::string name, const rust::Vec<rust::String>& arr);".to_string());
 
             method_impls.insert(
                 0,
@@ -307,6 +323,87 @@ impl CxxTemplate {
                           // Noop
                         }}
                       }}
+                    }}
+                    
+                    void {cxx_mod}::emit(std::string name, const facebook::jsi::Value& data) {{
+                      std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
+                      {{
+                        std::lock_guard<std::mutex> lock(listenersMutex_);
+                        auto it = listenersMap_.find(name);
+                        if (it != listenersMap_.end()) {{
+                          for (auto &[_, listener] : it->second) {{
+                            listeners.push_back(listener);
+                          }}
+                        }}
+                      }}
+
+                      for (auto& listener : listeners) {{
+                        try {{
+                          callInvoker_->invokeAsync([listener, data](jsi::Runtime &rt) {{
+                            if (data.isUndefined()) {{
+                              // 데이터 없음 - 기존 동작
+                              listener->call(rt);
+                            }} else {{
+                              // jsi::Value 데이터 전달 (Object, Array 등 모든 타입 지원)
+                              listener->call(rt, data);
+                            }}
+                          }});
+                        }} catch (const std::exception& err) {{
+                          // Noop
+                        }}
+                      }}
+                    }}
+                    
+                    // Array<number> 타입 emit - SignalManager에서 호출
+                    void {cxx_mod}::emitArrayNumber(std::string name, const rust::Vec<double>& arr) {{
+                      std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
+                      {{
+                        std::lock_guard<std::mutex> lock(listenersMutex_);
+                        auto it = listenersMap_.find(name);
+                        if (it != listenersMap_.end()) {{
+                          for (auto &[_, listener] : it->second) {{
+                            listeners.push_back(listener);
+                          }}
+                        }}
+                      }}
+
+                      for (auto& listener : listeners) {{
+                        try {{
+                          callInvoker_->invokeAsync([listener, arr](jsi::Runtime &rt) {{
+                            // react::bridging::toJs를 사용하여 rust::Vec를 jsi::Value로 변환
+                            auto dataValue = react::bridging::toJs(rt, arr);
+                            listener->call(rt, dataValue);
+                          }});
+                        }} catch (const std::exception& err) {{
+                          // Noop
+                        }}
+                      }}
+                    }}
+                    
+                    // Array<string> 타입 emit - SignalManager에서 호출
+                    void {cxx_mod}::emitArrayString(std::string name, const rust::Vec<rust::String>& arr) {{
+                      std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
+                      {{
+                        std::lock_guard<std::mutex> lock(listenersMutex_);
+                        auto it = listenersMap_.find(name);
+                        if (it != listenersMap_.end()) {{
+                          for (auto &[_, listener] : it->second) {{
+                            listeners.push_back(listener);
+                          }}
+                        }}
+                      }}
+
+                      for (auto& listener : listeners) {{
+                        try {{
+                          callInvoker_->invokeAsync([listener, arr](jsi::Runtime &rt) {{
+                            // react::bridging::toJs를 사용하여 rust::Vec를 jsi::Value로 변환
+                            auto dataValue = react::bridging::toJs(rt, arr);
+                            listener->call(rt, dataValue);
+                          }});
+                        }} catch (const std::exception& err) {{
+                          // Noop
+                        }}
+                      }}
                     }}"#,
                 },
             );
@@ -328,8 +425,8 @@ impl CxxTemplate {
             {cxx_mod}::{cxx_mod}(
                 std::shared_ptr<react::CallInvoker> jsInvoker)
                 : TurboModule({cxx_mod}::kModuleName, jsInvoker) {{
-            {register_stmts}
               callInvoker_ = std::move(jsInvoker);
+            {register_stmts}
               module_ = std::shared_ptr<{cxx_ns}::bridging::{rs_module_name}>(
                 {cxx_ns}::bridging::create{rs_module_name}(
                   reinterpret_cast<uintptr_t>(this),
@@ -809,11 +906,21 @@ impl CxxTemplate {
             #include <mutex>
             #include <unordered_map>
 
+            // Forward declaration to avoid including React Native headers
+            namespace facebook {{
+            namespace jsi {{
+            class Value;
+            }} // namespace jsi
+            }} // namespace facebook
+
             namespace craby {{
             namespace {flat_name} {{
             namespace signals {{
 
             using Delegate = std::function<void(const std::string& signalName)>;
+            using DelegateWithValue = std::function<void(const std::string& signalName, const facebook::jsi::Value& data)>;
+            using DelegateArrayNumber = std::function<void(const std::string& signalName, rust::Vec<double> arr)>;
+            using DelegateArrayString = std::function<void(const std::string& signalName, rust::Vec<rust::String> arr)>;
 
             class SignalManager {{
             public:
@@ -830,19 +937,62 @@ impl CxxTemplate {
                 }}
               }}
 
+              // Array<number> 타입 emit - Rust에서 호출
+              void emit_array_number(uintptr_t id, rust::Str name, rust::Slice<const double> arr) const {{
+                std::lock_guard<std::mutex> lock(mutex_);
+                auto it = delegates_array_number_.find(id);
+                if (it != delegates_array_number_.end()) {{
+                  std::string nameStr(name.data(), name.size());
+                  rust::Vec<double> vec;
+                  vec.reserve(arr.size());
+                  for (size_t i = 0; i < arr.size(); ++i) {{
+                    vec.push_back(arr[i]);
+                  }}
+                  it->second(nameStr, vec);
+                }}
+              }}
+              
+              // Array<string> 타입 emit - Rust에서 호출
+              void emit_array_string(uintptr_t id, rust::Str name, rust::Slice<const rust::Str> arr) const {{
+                std::lock_guard<std::mutex> lock(mutex_);
+                auto it = delegates_array_string_.find(id);
+                if (it != delegates_array_string_.end()) {{
+                  std::string nameStr(name.data(), name.size());
+                  rust::Vec<rust::String> vec;
+                  vec.reserve(arr.size());
+                  for (size_t i = 0; i < arr.size(); ++i) {{
+                    vec.push_back(rust::String(arr[i].data(), arr[i].size()));
+                  }}
+                  it->second(nameStr, vec);
+                }}
+              }}
+
               void registerDelegate(uintptr_t id, Delegate delegate) const {{
                 std::lock_guard<std::mutex> lock(mutex_);
                 delegates_.insert_or_assign(id, delegate);
               }}
 
+              void registerDelegateWithValue(uintptr_t id, DelegateWithValue delegate, DelegateArrayNumber delegateArrayNumber, DelegateArrayString delegateArrayString) const {{
+                std::lock_guard<std::mutex> lock(mutex_);
+                delegates_with_value_.insert_or_assign(id, delegate);
+                delegates_array_number_.insert_or_assign(id, delegateArrayNumber);
+                delegates_array_string_.insert_or_assign(id, delegateArrayString);
+              }}
+
               void unregisterDelegate(uintptr_t id) const {{
                 std::lock_guard<std::mutex> lock(mutex_);
                 delegates_.erase(id);
+                delegates_with_value_.erase(id);
+                delegates_array_number_.erase(id);
+                delegates_array_string_.erase(id);
               }}
 
             private:
               SignalManager() = default;
               mutable std::unordered_map<uintptr_t, Delegate> delegates_;
+              mutable std::unordered_map<uintptr_t, DelegateWithValue> delegates_with_value_;
+              mutable std::unordered_map<uintptr_t, DelegateArrayNumber> delegates_array_number_;
+              mutable std::unordered_map<uintptr_t, DelegateArrayString> delegates_array_string_;
               mutable std::mutex mutex_;
             }};
 

@@ -118,6 +118,14 @@ impl CrabyTestSpec for CrabyTest {
 
     fn trigger_signal(&mut self) -> Void {
         self.emit(CrabyTestSignal::OnSignal);
+        
+        // 예제: Array<number> 타입으로 signal emit
+        let numbers = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        self.emit_array_number(CrabyTestSignal::OnSignal, &numbers);
+        
+        // 예제: Array<string> 타입으로 signal emit
+        let strings: Vec<String> = vec!["hello".to_string(), "world".to_string(), "from".to_string(), "rust".to_string()];
+        self.emit_array_string(CrabyTestSignal::OnSignal, &strings);
     }
 
     fn camel_method(&mut self) -> Void {
