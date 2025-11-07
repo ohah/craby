@@ -35,7 +35,6 @@ pub trait CrabyTestSpec {
     // Array<string> 타입 emit
     fn emit_array_string(&self, signal_name: CrabyTestSignal, arr: &[String]) {
         let manager = crate::ffi::bridging::get_signal_manager();
-        let rust_strs: Vec<&str> = arr.iter().map(|s| s.as_str()).collect();
         match signal_name {
             CrabyTestSignal::OnSignal => { let str_refs: Vec<&str> = arr.iter().map(|s| s.as_str()).collect(); manager.emit_array_string(self.id(), "onSignal", &str_refs); },
         }
