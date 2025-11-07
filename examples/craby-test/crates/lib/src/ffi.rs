@@ -134,6 +134,8 @@ pub mod bridging {
         type SignalManager;
 
         fn emit(self: &SignalManager, id: usize, name: &str);
+        fn emit_array_number(self: &SignalManager, id: usize, name: &str, arr: &[f64]);
+        fn emit_array_string(self: &SignalManager, id: usize, name: &str, arr: &[&str]);
         #[rust_name = "get_signal_manager"]
         fn getSignalManager() -> &'static SignalManager;
     }

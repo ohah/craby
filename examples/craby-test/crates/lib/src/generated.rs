@@ -23,6 +23,23 @@ pub trait CrabyTestSpec {
             CrabyTestSignal::OnSignal => manager.emit(self.id(), "onSignal"),
         }
     }
+
+    // Array<number> 타입 emit
+    fn emit_array_number(&self, signal_name: CrabyTestSignal, arr: &[f64]) {
+        let manager = crate::ffi::bridging::get_signal_manager();
+        match signal_name {
+            CrabyTestSignal::OnSignal => manager.emit_array_number(self.id(), "onSignal", arr),
+        }
+    }
+
+    // Array<string> 타입 emit
+    fn emit_array_string(&self, signal_name: CrabyTestSignal, arr: &[String]) {
+        let manager = crate::ffi::bridging::get_signal_manager();
+        let rust_strs: Vec<&str> = arr.iter().map(|s| s.as_str()).collect();
+        match signal_name {
+            CrabyTestSignal::OnSignal => { let str_refs: Vec<&str> = arr.iter().map(|s| s.as_str()).collect(); manager.emit_array_string(self.id(), "onSignal", &str_refs); },
+        }
+    }
     fn array_method(&mut self, arg: Array<Number>) -> Array<Number>;
     fn boolean_method(&mut self, arg: Boolean) -> Boolean;
     fn camel_method(&mut self) -> Void;
