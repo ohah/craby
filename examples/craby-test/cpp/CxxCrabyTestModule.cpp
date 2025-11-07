@@ -19,22 +19,19 @@ CxxCrabyTestModule::CxxCrabyTestModule(
   uintptr_t id = reinterpret_cast<uintptr_t>(this);
   auto& manager = craby::crabytest::signals::SignalManager::getInstance();
   manager.registerDelegate(id,
-                           std::bind(&CxxCrabyTestModule::emit,
-                           this,
-                           std::placeholders::_1));
+                           [this](const std::string& name) {
+                             this->emit(name);
+                           });
   manager.registerDelegateWithValue(id,
-                                    std::bind(&CxxCrabyTestModule::emit,
-                                    this,
-                                    std::placeholders::_1,
-                                    std::placeholders::_2),
-                                    std::bind(&CxxCrabyTestModule::emitArrayNumber,
-                                    this,
-                                    std::placeholders::_1,
-                                    std::placeholders::_2),
-                                    std::bind(&CxxCrabyTestModule::emitArrayString,
-                                    this,
-                                    std::placeholders::_1,
-                                    std::placeholders::_2));
+                                    [this](const std::string& name, const facebook::jsi::Value& data) {
+                                      this->emit(name, data);
+                                    },
+                                    [this](const std::string& name, rust::Vec<double> arr) {
+                                      this->emitArrayNumber(name, arr);
+                                    },
+                                    [this](const std::string& name, rust::Vec<rust::String> arr) {
+                                      this->emitArrayString(name, arr);
+                                    });
   module_ = std::shared_ptr<craby::crabytest::bridging::CrabyTest>(
     craby::crabytest::bridging::createCrabyTest(
       reinterpret_cast<uintptr_t>(this),
@@ -118,14 +115,17 @@ void CxxCrabyTestModule::emit(std::string name, const facebook::jsi::Value& data
     }
   }
 
+  // jsi::Value는 Runtime에 종속적이므로, 현재 Runtime에서 직접 사용
+  // data는 이미 현재 Runtime의 값이므로, 람다에서 직접 사용 가능
   for (auto& listener : listeners) {
     try {
-      callInvoker_->invokeAsync([listener, data](jsi::Runtime &rt) {
+      callInvoker_->invokeAsync([listener, &data](jsi::Runtime &rt) {
         if (data.isUndefined()) {
           // 데이터 없음 - 기존 동작
           listener->call(rt);
         } else {
-          // jsi::Value 데이터 전달 (Object, Array 등 모든 타입 지원)
+          // data를 현재 Runtime에서 직접 사용
+          // jsi::Value는 Runtime에 종속적이지만, 같은 Runtime에서 사용 가능
           listener->call(rt, data);
         }
       });
@@ -148,11 +148,15 @@ void CxxCrabyTestModule::emitArrayNumber(std::string name, const rust::Vec<doubl
     }
   }
 
+  // arr를 복사하여 람다에서 사용 (모든 리스너가 같은 복사본 공유)
+  rust::Vec<double> arrCopy = arr;
   for (auto& listener : listeners) {
     try {
-      callInvoker_->invokeAsync([listener, arr](jsi::Runtime &rt) {
-        // react::bridging::toJs를 사용하여 rust::Vec를 jsi::Value로 변환
-        auto dataValue = react::bridging::toJs(rt, arr);
+      callInvoker_->invokeAsync([listener, arrCopy](jsi::Runtime &rt) {
+        // Bridging<rust::Vec<double>>::toJs를 사용하여 rust::Vec를 jsi::Array로 변환
+        auto jsArray = facebook::react::Bridging<rust::Vec<double>>::toJs(rt, arrCopy);
+        // jsi::Array를 jsi::Value로 직접 변환 (jsi::Value는 jsi::Object를 받는 생성자가 있음)
+        jsi::Value dataValue(std::move(jsArray));
         listener->call(rt, dataValue);
       });
     } catch (const std::exception& err) {
@@ -174,11 +178,15 @@ void CxxCrabyTestModule::emitArrayString(std::string name, const rust::Vec<rust:
     }
   }
 
+  // arr를 복사하여 람다에서 사용 (모든 리스너가 같은 복사본 공유)
+  rust::Vec<rust::String> arrCopy = arr;
   for (auto& listener : listeners) {
     try {
-      callInvoker_->invokeAsync([listener, arr](jsi::Runtime &rt) {
-        // react::bridging::toJs를 사용하여 rust::Vec를 jsi::Value로 변환
-        auto dataValue = react::bridging::toJs(rt, arr);
+      callInvoker_->invokeAsync([listener, arrCopy](jsi::Runtime &rt) {
+        // Bridging<rust::Vec<rust::String>>::toJs를 사용하여 rust::Vec를 jsi::Array로 변환
+        auto jsArray = facebook::react::Bridging<rust::Vec<rust::String>>::toJs(rt, arrCopy);
+        // jsi::Array를 jsi::Value로 직접 변환 (jsi::Value는 jsi::Object를 받는 생성자가 있음)
+        jsi::Value dataValue(std::move(jsArray));
         listener->call(rt, dataValue);
       });
     } catch (const std::exception& err) {
