@@ -15,8 +15,8 @@ std::string CxxCalculatorModule::dataPath = std::string();
 CxxCalculatorModule::CxxCalculatorModule(
     std::shared_ptr<react::CallInvoker> jsInvoker)
     : TurboModule(CxxCalculatorModule::kModuleName, jsInvoker) {
-  // No signals
   callInvoker_ = std::move(jsInvoker);
+  // No signals
   module_ = std::shared_ptr<craby::crabytest::bridging::Calculator>(
     craby::crabytest::bridging::createCalculator(
       reinterpret_cast<uintptr_t>(this),
