@@ -15,13 +15,26 @@ std::string CxxCrabyTestModule::dataPath = std::string();
 CxxCrabyTestModule::CxxCrabyTestModule(
     std::shared_ptr<react::CallInvoker> jsInvoker)
     : TurboModule(CxxCrabyTestModule::kModuleName, jsInvoker) {
+  callInvoker_ = std::move(jsInvoker);
   uintptr_t id = reinterpret_cast<uintptr_t>(this);
   auto& manager = craby::crabytest::signals::SignalManager::getInstance();
   manager.registerDelegate(id,
                            std::bind(&CxxCrabyTestModule::emit,
                            this,
                            std::placeholders::_1));
-  callInvoker_ = std::move(jsInvoker);
+  manager.registerDelegateWithValue(id,
+                                    std::bind(&CxxCrabyTestModule::emit,
+                                    this,
+                                    std::placeholders::_1,
+                                    std::placeholders::_2),
+                                    std::bind(&CxxCrabyTestModule::emitArrayNumber,
+                                    this,
+                                    std::placeholders::_1,
+                                    std::placeholders::_2),
+                                    std::bind(&CxxCrabyTestModule::emitArrayString,
+                                    this,
+                                    std::placeholders::_1,
+                                    std::placeholders::_2));
   module_ = std::shared_ptr<craby::crabytest::bridging::CrabyTest>(
     craby::crabytest::bridging::createCrabyTest(
       reinterpret_cast<uintptr_t>(this),
@@ -86,6 +99,87 @@ void CxxCrabyTestModule::emit(std::string name) {
     try {
       callInvoker_->invokeAsync([listener](jsi::Runtime &rt) {
         listener->call(rt);
+      });
+    } catch (const std::exception& err) {
+      // Noop
+    }
+  }
+}
+
+void CxxCrabyTestModule::emit(std::string name, const facebook::jsi::Value& data) {
+  std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
+  {
+    std::lock_guard<std::mutex> lock(listenersMutex_);
+    auto it = listenersMap_.find(name);
+    if (it != listenersMap_.end()) {
+      for (auto &[_, listener] : it->second) {
+        listeners.push_back(listener);
+      }
+    }
+  }
+
+  for (auto& listener : listeners) {
+    try {
+      callInvoker_->invokeAsync([listener, data](jsi::Runtime &rt) {
+        if (data.isUndefined()) {
+          // 데이터 없음 - 기존 동작
+          listener->call(rt);
+        } else {
+          // jsi::Value 데이터 전달 (Object, Array 등 모든 타입 지원)
+          listener->call(rt, data);
+        }
+      });
+    } catch (const std::exception& err) {
+      // Noop
+    }
+  }
+}
+
+// Array<number> 타입 emit - SignalManager에서 호출
+void CxxCrabyTestModule::emitArrayNumber(std::string name, const rust::Vec<double>& arr) {
+  std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
+  {
+    std::lock_guard<std::mutex> lock(listenersMutex_);
+    auto it = listenersMap_.find(name);
+    if (it != listenersMap_.end()) {
+      for (auto &[_, listener] : it->second) {
+        listeners.push_back(listener);
+      }
+    }
+  }
+
+  for (auto& listener : listeners) {
+    try {
+      callInvoker_->invokeAsync([listener, arr](jsi::Runtime &rt) {
+        // react::bridging::toJs를 사용하여 rust::Vec를 jsi::Value로 변환
+        auto dataValue = react::bridging::toJs(rt, arr);
+        listener->call(rt, dataValue);
+      });
+    } catch (const std::exception& err) {
+      // Noop
+    }
+  }
+}
+
+// Array<string> 타입 emit - SignalManager에서 호출
+void CxxCrabyTestModule::emitArrayString(std::string name, const rust::Vec<rust::String>& arr) {
+  std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
+  {
+    std::lock_guard<std::mutex> lock(listenersMutex_);
+    auto it = listenersMap_.find(name);
+    if (it != listenersMap_.end()) {
+      for (auto &[_, listener] : it->second) {
+        listeners.push_back(listener);
+      }
+    }
+  }
+
+  for (auto& listener : listeners) {
+    try {
+      callInvoker_->invokeAsync([listener, arr](jsi::Runtime &rt) {
+        // react::bridging::toJs를 사용하여 rust::Vec를 jsi::Value로 변환
+        auto dataValue = react::bridging::toJs(rt, arr);
+        listener->call(rt, dataValue);
       });
     } catch (const std::exception& err) {
       // Noop

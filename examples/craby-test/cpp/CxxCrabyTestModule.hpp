@@ -22,6 +22,12 @@ public:
   void invalidate();
   void emit(std::string name);
 
+  void emit(std::string name, const facebook::jsi::Value& data);
+
+  void emitArrayNumber(std::string name, const rust::Vec<double>& arr);
+
+  void emitArrayString(std::string name, const rust::Vec<rust::String>& arr);
+
   static facebook::jsi::Value
   arrayMethod(facebook::jsi::Runtime &rt,
       facebook::react::TurboModule &turboModule,
