@@ -132,14 +132,14 @@ impl CrabyTestSpec for CrabyTest {
     }
 
     fn trigger_signal_object(&mut self) -> Void {
-        // JSON 문자열을 직접 생성하여 바이트로 변환
+        // Create JSON string directly and convert to bytes
         let json_str = r#"{"foo":"test_foo","bar":42.0,"baz":true,"sub":{"a":"test_sub_a","b":100.0,"c":false},"camel_case":1.0,"pascal_case":2.0,"snake_case":3.0}"#;
         let json_bytes = json_str.as_bytes();
         self.emit_object(CrabyTestSignal::OnSignal, json_bytes);
     }
 
     fn trigger_signal_array_object(&mut self) -> Void {
-        // 각 Object를 JSON 문자열로 직렬화하여 Vec<String>으로 전달
+        // Serialize each Object as JSON string and pass as Vec<String>
         let json_strs: Vec<String> = vec![
             r#"{"foo":"test_foo_1","bar":1.0,"baz":true}"#.to_string(),
             r#"{"foo":"test_foo_2","bar":2.0,"baz":false}"#.to_string(),

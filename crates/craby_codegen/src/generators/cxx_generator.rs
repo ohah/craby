@@ -342,17 +342,17 @@ impl CxxTemplate {
                         }}
                       }}
 
-                      // jsi::Value는 Runtime에 종속적이므로, 현재 Runtime에서 직접 사용
-                      // data는 이미 현재 Runtime의 값이므로, 람다에서 직접 사용 가능
+                      // jsi::Value is runtime-dependent, so use it directly in the current runtime
+                      // data is already a value from the current runtime, so it can be used directly in lambda
                       for (auto& listener : listeners) {{
                         try {{
                           callInvoker_->invokeAsync([listener, &data](jsi::Runtime &rt) {{
                             if (data.isUndefined()) {{
-                              // 데이터 없음 - 기존 동작
+                              // No data - existing behavior
                               listener->call(rt);
                             }} else {{
-                              // data를 현재 Runtime에서 직접 사용
-                              // jsi::Value는 Runtime에 종속적이지만, 같은 Runtime에서 사용 가능
+                              // Use data directly in the current runtime
+                              // jsi::Value is runtime-dependent but can be used in the same runtime
                               listener->call(rt, data);
                             }}
                           }});
@@ -362,7 +362,7 @@ impl CxxTemplate {
                       }}
                     }}
                     
-                    // Array<number> 타입 emit - SignalManager에서 호출
+                    // Array<number> type emit - called from SignalManager
                     void {cxx_mod}::emitArrayNumber(std::string name, const rust::Vec<double>& arr) {{
                       std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
                       {{
@@ -375,14 +375,14 @@ impl CxxTemplate {
                         }}
                       }}
 
-                      // arr를 복사하여 람다에서 사용 (모든 리스너가 같은 복사본 공유)
+                      // Copy arr for use in lambda (all listeners share the same copy)
                       rust::Vec<double> arrCopy = arr;
                       for (auto& listener : listeners) {{
                         try {{
                           callInvoker_->invokeAsync([listener, arrCopy](jsi::Runtime &rt) {{
-                            // Bridging<rust::Vec<double>>::toJs를 사용하여 rust::Vec를 jsi::Array로 변환
+                            // Convert rust::Vec to jsi::Array using Bridging<rust::Vec<double>>::toJs
                             auto jsArray = facebook::react::Bridging<rust::Vec<double>>::toJs(rt, arrCopy);
-                            // jsi::Array를 jsi::Value로 직접 변환 (jsi::Value는 jsi::Object를 받는 생성자가 있음)
+                            // Convert jsi::Array directly to jsi::Value (jsi::Value has a constructor that accepts jsi::Object)
                             jsi::Value dataValue(std::move(jsArray));
                             listener->call(rt, dataValue);
                           }});
@@ -392,7 +392,7 @@ impl CxxTemplate {
                       }}
                     }}
                     
-                    // Array<string> 타입 emit - SignalManager에서 호출
+                    // Array<string> type emit - called from SignalManager
                     void {cxx_mod}::emitArrayString(std::string name, const rust::Vec<rust::String>& arr) {{
                       std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
                       {{
@@ -405,14 +405,14 @@ impl CxxTemplate {
                         }}
                       }}
 
-                      // arr를 복사하여 람다에서 사용 (모든 리스너가 같은 복사본 공유)
+                      // Copy arr for use in lambda (all listeners share the same copy)
                       rust::Vec<rust::String> arrCopy = arr;
                       for (auto& listener : listeners) {{
                         try {{
                           callInvoker_->invokeAsync([listener, arrCopy](jsi::Runtime &rt) {{
-                            // Bridging<rust::Vec<rust::String>>::toJs를 사용하여 rust::Vec를 jsi::Array로 변환
+                            // Convert rust::Vec to jsi::Array using Bridging<rust::Vec<rust::String>>::toJs
                             auto jsArray = facebook::react::Bridging<rust::Vec<rust::String>>::toJs(rt, arrCopy);
-                            // jsi::Array를 jsi::Value로 직접 변환 (jsi::Value는 jsi::Object를 받는 생성자가 있음)
+                            // Convert jsi::Array directly to jsi::Value (jsi::Value has a constructor that accepts jsi::Object)
                             jsi::Value dataValue(std::move(jsArray));
                             listener->call(rt, dataValue);
                           }});
@@ -422,7 +422,7 @@ impl CxxTemplate {
                       }}
                     }}
                     
-                    // Array<Object> 타입 emit - Rust에서 Vec<String>으로 전달받아 각 문자열을 JSON.parse하여 배열로 변환
+                    // Array<Object> type emit - receive Vec<String> from Rust and convert each string to array using JSON.parse
                     void {cxx_mod}::emitArrayObject(std::string name, const rust::Vec<rust::String>& arr) {{
                       std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
                       {{
@@ -435,16 +435,16 @@ impl CxxTemplate {
                         }}
                       }}
 
-                      // arr를 복사하여 람다에서 사용 (모든 리스너가 같은 복사본 공유)
+                      // Copy arr for use in lambda (all listeners share the same copy)
                       rust::Vec<rust::String> arrCopy = arr;
                       for (auto& listener : listeners) {{
                         try {{
                           callInvoker_->invokeAsync([listener, arrCopy](jsi::Runtime &rt) {{
-                            // JSON 객체 가져오기
+                            // Get JSON object
                             auto json = rt.global().getPropertyAsObject(rt, "JSON");
                             auto jsonParse = json.getPropertyAsFunction(rt, "parse");
                             
-                            // 각 JSON 문자열을 파싱하여 배열로 만들기
+                            // Parse each JSON string and create an array
                             auto jsArray = jsi::Array(rt, arrCopy.size());
                             for (size_t i = 0; i < arrCopy.size(); ++i) {{
                               std::string jsonStr(arrCopy[i].data(), arrCopy[i].size());
@@ -462,7 +462,7 @@ impl CxxTemplate {
                       }}
                     }}
                     
-                    // Object 타입 emit - Rust에서 &[u8]로 전달받아 JSON으로 파싱하여 Object로 변환
+                    // Object type emit - receive &[u8] from Rust and parse as JSON to Object
                     void {cxx_mod}::emitObject(std::string name, rust::Slice<const uint8_t> data) {{
                       std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
                       {{
@@ -475,14 +475,14 @@ impl CxxTemplate {
                         }}
                       }}
 
-                      // data를 복사하여 람다에서 사용
+                      // Copy data for use in lambda
                       std::vector<uint8_t> dataCopy(data.begin(), data.end());
                       for (auto& listener : listeners) {{
                         try {{
                           callInvoker_->invokeAsync([listener, dataCopy](jsi::Runtime &rt) {{
-                            // JSON 바이트를 문자열로 변환
+                            // Convert JSON bytes to string
                             std::string jsonStr(dataCopy.begin(), dataCopy.end());
-                            // JSON 문자열을 jsi::Value로 파싱
+                            // Parse JSON string to jsi::Value
                             auto json = rt.global().getPropertyAsObject(rt, "JSON");
                             auto jsonParse = json.getPropertyAsFunction(rt, "parse");
                             jsi::Value jsonStrValue = react::bridging::toJs(rt, jsonStr);
@@ -1028,7 +1028,7 @@ impl CxxTemplate {
                 }}
               }}
 
-              // Array<number> 타입 emit - Rust에서 호출
+              // Array<number> type emit - called from Rust
               void emit_array_number(uintptr_t id, rust::Str name, rust::Slice<const double> arr) const {{
                 std::lock_guard<std::mutex> lock(mutex_);
                 auto it = delegates_array_number_.find(id);
@@ -1043,7 +1043,7 @@ impl CxxTemplate {
                 }}
               }}
               
-              // Array<string> 타입 emit - Rust에서 호출
+              // Array<string> type emit - called from Rust
               void emit_array_string(uintptr_t id, rust::Str name, rust::Slice<const rust::Str> arr) const {{
                 std::lock_guard<std::mutex> lock(mutex_);
                 auto it = delegates_array_string_.find(id);
@@ -1058,7 +1058,7 @@ impl CxxTemplate {
                 }}
               }}
               
-              // Array<Object> 타입 emit - Rust에서 호출 (각 Object를 JSON 문자열로 직렬화)
+              // Array<Object> type emit - called from Rust (each Object is serialized as JSON string)
               void emit_array_object(uintptr_t id, rust::Str name, rust::Slice<const rust::Str> arr) const {{
                 std::lock_guard<std::mutex> lock(mutex_);
                 auto it = delegates_array_object_.find(id);
@@ -1073,7 +1073,7 @@ impl CxxTemplate {
                 }}
               }}
               
-              // Object 타입 emit - Rust에서 &[u8]로 전달받아 C++에서 ArrayBuffer로 변환
+              // Object type emit - receive &[u8] from Rust and convert to ArrayBuffer in C++
               void emit_object(uintptr_t id, rust::Str name, rust::Slice<const uint8_t> data) const {{
                 std::lock_guard<std::mutex> lock(mutex_);
                 auto it = delegates_object_.find(id);
