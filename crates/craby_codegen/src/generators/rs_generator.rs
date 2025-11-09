@@ -116,6 +116,8 @@ impl RsTemplate {
                     fn emit(self: &SignalManager, id: usize, name: &str);
                     fn emit_array_number(self: &SignalManager, id: usize, name: &str, arr: &[f64]);
                     fn emit_array_string(self: &SignalManager, id: usize, name: &str, arr: &[&str]);
+                    fn emit_array_object(self: &SignalManager, id: usize, name: &str, arr: &[&str]);
+                    fn emit_object(self: &SignalManager, id: usize, name: &str, data: &[u8]);
                     #[rust_name = "get_signal_manager"]
                     fn getSignalManager() -> &'static SignalManager;
                 }}"#,
@@ -220,7 +222,14 @@ impl RsTemplate {
                 let member_name = pascal_case(&signal.name);
                 format!("{signal_enum_name}::{member_name} => {{ let str_refs: Vec<&str> = arr.iter().map(|s| s.as_str()).collect(); manager.emit_array_string(self.id(), \"{raw}\", &str_refs); }},", raw = signal.name)
             }).collect::<Vec<_>>().join("\n"), 8);
-            
+            let pattern_match_stmts_array_object = indent_str(&schema.signals.iter().map(|signal| {
+                let member_name = pascal_case(&signal.name);
+                format!("{signal_enum_name}::{member_name} => {{ let str_refs: Vec<&str> = arr.iter().map(|s| s.as_str()).collect(); manager.emit_array_object(self.id(), \"{raw}\", &str_refs); }},", raw = signal.name)
+            }).collect::<Vec<_>>().join("\n"), 8);
+            let pattern_match_stmts_object = indent_str(&schema.signals.iter().map(|signal| {
+                let member_name = pascal_case(&signal.name);
+                format!("{signal_enum_name}::{member_name} => manager.emit_object(self.id(), \"{raw}\", data),", raw = signal.name)
+            }).collect::<Vec<_>>().join("\n"), 8);
             let emit_impl = formatdoc! {
                 r#"
                 fn emit(&self, signal_name: {signal_enum_name}) {{
@@ -230,7 +239,6 @@ impl RsTemplate {
                     }}
                 }}
                 
-                // Array<number> 타입 emit
                 fn emit_array_number(&self, signal_name: {signal_enum_name}, arr: &[f64]) {{
                     let manager = crate::ffi::bridging::get_signal_manager();
                     match signal_name {{
@@ -238,11 +246,24 @@ impl RsTemplate {
                     }}
                 }}
                 
-                // Array<string> 타입 emit
                 fn emit_array_string(&self, signal_name: {signal_enum_name}, arr: &[String]) {{
                     let manager = crate::ffi::bridging::get_signal_manager();
                     match signal_name {{
                 {pattern_match_stmts_array_string}
+                    }}
+                }}
+                
+                fn emit_array_object(&self, signal_name: {signal_enum_name}, arr: &[String]) {{
+                    let manager = crate::ffi::bridging::get_signal_manager();
+                    match signal_name {{
+                {pattern_match_stmts_array_object}
+                    }}
+                }}
+                
+                fn emit_object(&self, signal_name: {signal_enum_name}, data: &[u8]) {{
+                    let manager = crate::ffi::bridging::get_signal_manager();
+                    match signal_name {{
+                {pattern_match_stmts_object}
                     }}
                 }}"#,
             };

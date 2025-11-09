@@ -52,7 +52,12 @@ export interface Spec extends NativeModule {
   snake_method(): void;
   // Signals
   onSignal: Signal;
+  onFinished: Signal;
   triggerSignal(): void;
+  triggerSignalArrayNumber(): void;
+  triggerSignalArrayString(): void;
+  triggerSignalObject(): void;
+  triggerSignalArrayObject(): void;
 }
 
 export default NativeModuleRegistry.getEnforcing<Spec>('CrabyTest');

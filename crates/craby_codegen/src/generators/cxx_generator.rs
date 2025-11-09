@@ -203,6 +203,12 @@ impl CxxTemplate {
                                                   }},
                                                   [this](const std::string& name, rust::Vec<rust::String> arr) {{
                                                     this->emitArrayString(name, arr);
+                                                  }},
+                                                  [this](const std::string& name, rust::Vec<rust::String> arr) {{
+                                                    this->emitArrayObject(name, arr);
+                                                  }},
+                                                  [this](const std::string& name, rust::Slice<const uint8_t> data) {{
+                                                    this->emitObject(name, data);
                                                   }});"#,
             };
 
@@ -294,6 +300,8 @@ impl CxxTemplate {
             method_defs.insert(1, "void emit(std::string name, const facebook::jsi::Value& data);".to_string());
             method_defs.insert(2, "void emitArrayNumber(std::string name, const rust::Vec<double>& arr);".to_string());
             method_defs.insert(3, "void emitArrayString(std::string name, const rust::Vec<rust::String>& arr);".to_string());
+            method_defs.insert(4, "void emitArrayObject(std::string name, const rust::Vec<rust::String>& arr);".to_string());
+            method_defs.insert(5, "void emitObject(std::string name, rust::Slice<const uint8_t> data);".to_string());
 
             method_impls.insert(
                 0,
@@ -407,6 +415,79 @@ impl CxxTemplate {
                             // jsi::Array를 jsi::Value로 직접 변환 (jsi::Value는 jsi::Object를 받는 생성자가 있음)
                             jsi::Value dataValue(std::move(jsArray));
                             listener->call(rt, dataValue);
+                          }});
+                        }} catch (const std::exception& err) {{
+                          // Noop
+                        }}
+                      }}
+                    }}
+                    
+                    // Array<Object> 타입 emit - Rust에서 Vec<String>으로 전달받아 각 문자열을 JSON.parse하여 배열로 변환
+                    void {cxx_mod}::emitArrayObject(std::string name, const rust::Vec<rust::String>& arr) {{
+                      std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
+                      {{
+                        std::lock_guard<std::mutex> lock(listenersMutex_);
+                        auto it = listenersMap_.find(name);
+                        if (it != listenersMap_.end()) {{
+                          for (auto &[_, listener] : it->second) {{
+                            listeners.push_back(listener);
+                          }}
+                        }}
+                      }}
+
+                      // arr를 복사하여 람다에서 사용 (모든 리스너가 같은 복사본 공유)
+                      rust::Vec<rust::String> arrCopy = arr;
+                      for (auto& listener : listeners) {{
+                        try {{
+                          callInvoker_->invokeAsync([listener, arrCopy](jsi::Runtime &rt) {{
+                            // JSON 객체 가져오기
+                            auto json = rt.global().getPropertyAsObject(rt, "JSON");
+                            auto jsonParse = json.getPropertyAsFunction(rt, "parse");
+                            
+                            // 각 JSON 문자열을 파싱하여 배열로 만들기
+                            auto jsArray = jsi::Array(rt, arrCopy.size());
+                            for (size_t i = 0; i < arrCopy.size(); ++i) {{
+                              std::string jsonStr(arrCopy[i].data(), arrCopy[i].size());
+                              jsi::Value jsonStrValue = react::bridging::toJs(rt, jsonStr);
+                              auto jsonValue = jsonParse.call(rt, jsonStrValue.asString(rt));
+                              jsArray.setValueAtIndex(rt, i, jsonValue);
+                            }}
+                            
+                            jsi::Value dataValue(std::move(jsArray));
+                            listener->call(rt, dataValue);
+                          }});
+                        }} catch (const std::exception& err) {{
+                          // Noop
+                        }}
+                      }}
+                    }}
+                    
+                    // Object 타입 emit - Rust에서 &[u8]로 전달받아 JSON으로 파싱하여 Object로 변환
+                    void {cxx_mod}::emitObject(std::string name, rust::Slice<const uint8_t> data) {{
+                      std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
+                      {{
+                        std::lock_guard<std::mutex> lock(listenersMutex_);
+                        auto it = listenersMap_.find(name);
+                        if (it != listenersMap_.end()) {{
+                          for (auto &[_, listener] : it->second) {{
+                            listeners.push_back(listener);
+                          }}
+                        }}
+                      }}
+
+                      // data를 복사하여 람다에서 사용
+                      std::vector<uint8_t> dataCopy(data.begin(), data.end());
+                      for (auto& listener : listeners) {{
+                        try {{
+                          callInvoker_->invokeAsync([listener, dataCopy](jsi::Runtime &rt) {{
+                            // JSON 바이트를 문자열로 변환
+                            std::string jsonStr(dataCopy.begin(), dataCopy.end());
+                            // JSON 문자열을 jsi::Value로 파싱
+                            auto json = rt.global().getPropertyAsObject(rt, "JSON");
+                            auto jsonParse = json.getPropertyAsFunction(rt, "parse");
+                            jsi::Value jsonStrValue = react::bridging::toJs(rt, jsonStr);
+                            auto jsonValue = jsonParse.call(rt, jsonStrValue.asString(rt));
+                            listener->call(rt, jsonValue);
                           }});
                         }} catch (const std::exception& err) {{
                           // Noop
@@ -929,6 +1010,8 @@ impl CxxTemplate {
             using DelegateWithValue = std::function<void(const std::string& signalName, const facebook::jsi::Value& data)>;
             using DelegateArrayNumber = std::function<void(const std::string& signalName, rust::Vec<double> arr)>;
             using DelegateArrayString = std::function<void(const std::string& signalName, rust::Vec<rust::String> arr)>;
+            using DelegateArrayObject = std::function<void(const std::string& signalName, rust::Vec<rust::String> arr)>;
+            using DelegateObject = std::function<void(const std::string& signalName, rust::Slice<const uint8_t> data)>;
 
             class SignalManager {{
             public:
@@ -974,17 +1057,44 @@ impl CxxTemplate {
                   it->second(nameStr, vec);
                 }}
               }}
+              
+              // Array<Object> 타입 emit - Rust에서 호출 (각 Object를 JSON 문자열로 직렬화)
+              void emit_array_object(uintptr_t id, rust::Str name, rust::Slice<const rust::Str> arr) const {{
+                std::lock_guard<std::mutex> lock(mutex_);
+                auto it = delegates_array_object_.find(id);
+                if (it != delegates_array_object_.end()) {{
+                  std::string nameStr(name.data(), name.size());
+                  rust::Vec<rust::String> vec;
+                  vec.reserve(arr.size());
+                  for (size_t i = 0; i < arr.size(); ++i) {{
+                    vec.push_back(rust::String(arr[i].data(), arr[i].size()));
+                  }}
+                  it->second(nameStr, vec);
+                }}
+              }}
+              
+              // Object 타입 emit - Rust에서 &[u8]로 전달받아 C++에서 ArrayBuffer로 변환
+              void emit_object(uintptr_t id, rust::Str name, rust::Slice<const uint8_t> data) const {{
+                std::lock_guard<std::mutex> lock(mutex_);
+                auto it = delegates_object_.find(id);
+                if (it != delegates_object_.end()) {{
+                  std::string nameStr(name.data(), name.size());
+                  it->second(nameStr, data);
+                }}
+              }}
 
               void registerDelegate(uintptr_t id, Delegate delegate) const {{
                 std::lock_guard<std::mutex> lock(mutex_);
                 delegates_.insert_or_assign(id, delegate);
               }}
 
-              void registerDelegateWithValue(uintptr_t id, DelegateWithValue delegate, DelegateArrayNumber delegateArrayNumber, DelegateArrayString delegateArrayString) const {{
+              void registerDelegateWithValue(uintptr_t id, DelegateWithValue delegate, DelegateArrayNumber delegateArrayNumber, DelegateArrayString delegateArrayString, DelegateArrayObject delegateArrayObject, DelegateObject delegateObject) const {{
                 std::lock_guard<std::mutex> lock(mutex_);
                 delegates_with_value_.insert_or_assign(id, delegate);
                 delegates_array_number_.insert_or_assign(id, delegateArrayNumber);
                 delegates_array_string_.insert_or_assign(id, delegateArrayString);
+                delegates_array_object_.insert_or_assign(id, delegateArrayObject);
+                delegates_object_.insert_or_assign(id, delegateObject);
               }}
 
               void unregisterDelegate(uintptr_t id) const {{
@@ -993,6 +1103,8 @@ impl CxxTemplate {
                 delegates_with_value_.erase(id);
                 delegates_array_number_.erase(id);
                 delegates_array_string_.erase(id);
+                delegates_array_object_.erase(id);
+                delegates_object_.erase(id);
               }}
 
             private:
@@ -1001,6 +1113,8 @@ impl CxxTemplate {
               mutable std::unordered_map<uintptr_t, DelegateWithValue> delegates_with_value_;
               mutable std::unordered_map<uintptr_t, DelegateArrayNumber> delegates_array_number_;
               mutable std::unordered_map<uintptr_t, DelegateArrayString> delegates_array_string_;
+              mutable std::unordered_map<uintptr_t, DelegateArrayObject> delegates_array_object_;
+              mutable std::unordered_map<uintptr_t, DelegateObject> delegates_object_;
               mutable std::mutex mutex_;
             }};
 

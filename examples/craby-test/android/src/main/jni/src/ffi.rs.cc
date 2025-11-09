@@ -1210,6 +1210,14 @@ extern "C" {
 
 ::rust::repr::PtrLen craby$crabytest$bridging$cxxbridge1$craby_test_trigger_signal(::craby::crabytest::bridging::CrabyTest &it_) noexcept;
 
+::rust::repr::PtrLen craby$crabytest$bridging$cxxbridge1$craby_test_trigger_signal_array_number(::craby::crabytest::bridging::CrabyTest &it_) noexcept;
+
+::rust::repr::PtrLen craby$crabytest$bridging$cxxbridge1$craby_test_trigger_signal_array_object(::craby::crabytest::bridging::CrabyTest &it_) noexcept;
+
+::rust::repr::PtrLen craby$crabytest$bridging$cxxbridge1$craby_test_trigger_signal_array_string(::craby::crabytest::bridging::CrabyTest &it_) noexcept;
+
+::rust::repr::PtrLen craby$crabytest$bridging$cxxbridge1$craby_test_trigger_signal_object(::craby::crabytest::bridging::CrabyTest &it_) noexcept;
+
 ::rust::repr::PtrLen craby$crabytest$bridging$cxxbridge1$craby_test_write_data(::craby::crabytest::bridging::CrabyTest &it_, ::rust::Str value, bool *return$) noexcept;
 } // extern "C"
 } // namespace bridging
@@ -1229,6 +1237,16 @@ void craby$crabytest$signals$cxxbridge1$SignalManager$emit_array_number(::craby:
 void craby$crabytest$signals$cxxbridge1$SignalManager$emit_array_string(::craby::crabytest::signals::SignalManager const &self, ::std::size_t id, ::rust::Str name, ::rust::Slice<::rust::Str const> arr) noexcept {
   void (::craby::crabytest::signals::SignalManager::*emit_array_string$)(::std::size_t, ::rust::Str, ::rust::Slice<::rust::Str const>) const = &::craby::crabytest::signals::SignalManager::emit_array_string;
   (self.*emit_array_string$)(id, name, arr);
+}
+
+void craby$crabytest$signals$cxxbridge1$SignalManager$emit_array_object(::craby::crabytest::signals::SignalManager const &self, ::std::size_t id, ::rust::Str name, ::rust::Slice<::rust::Str const> arr) noexcept {
+  void (::craby::crabytest::signals::SignalManager::*emit_array_object$)(::std::size_t, ::rust::Str, ::rust::Slice<::rust::Str const>) const = &::craby::crabytest::signals::SignalManager::emit_array_object;
+  (self.*emit_array_object$)(id, name, arr);
+}
+
+void craby$crabytest$signals$cxxbridge1$SignalManager$emit_object(::craby::crabytest::signals::SignalManager const &self, ::std::size_t id, ::rust::Str name, ::rust::Slice<::std::uint8_t const> data) noexcept {
+  void (::craby::crabytest::signals::SignalManager::*emit_object$)(::std::size_t, ::rust::Str, ::rust::Slice<::std::uint8_t const>) const = &::craby::crabytest::signals::SignalManager::emit_object;
+  (self.*emit_object$)(id, name, data);
 }
 
 ::craby::crabytest::signals::SignalManager const *craby$crabytest$signals$cxxbridge1$get_signal_manager() noexcept {
@@ -1431,6 +1449,34 @@ void snakeMethod(::craby::crabytest::bridging::CrabyTest &it_) {
 
 void triggerSignal(::craby::crabytest::bridging::CrabyTest &it_) {
   ::rust::repr::PtrLen error$ = craby$crabytest$bridging$cxxbridge1$craby_test_trigger_signal(it_);
+  if (error$.ptr) {
+    throw ::rust::impl<::rust::Error>::error(error$);
+  }
+}
+
+void triggerSignalArrayNumber(::craby::crabytest::bridging::CrabyTest &it_) {
+  ::rust::repr::PtrLen error$ = craby$crabytest$bridging$cxxbridge1$craby_test_trigger_signal_array_number(it_);
+  if (error$.ptr) {
+    throw ::rust::impl<::rust::Error>::error(error$);
+  }
+}
+
+void triggerSignalArrayObject(::craby::crabytest::bridging::CrabyTest &it_) {
+  ::rust::repr::PtrLen error$ = craby$crabytest$bridging$cxxbridge1$craby_test_trigger_signal_array_object(it_);
+  if (error$.ptr) {
+    throw ::rust::impl<::rust::Error>::error(error$);
+  }
+}
+
+void triggerSignalArrayString(::craby::crabytest::bridging::CrabyTest &it_) {
+  ::rust::repr::PtrLen error$ = craby$crabytest$bridging$cxxbridge1$craby_test_trigger_signal_array_string(it_);
+  if (error$.ptr) {
+    throw ::rust::impl<::rust::Error>::error(error$);
+  }
+}
+
+void triggerSignalObject(::craby::crabytest::bridging::CrabyTest &it_) {
+  ::rust::repr::PtrLen error$ = craby$crabytest$bridging$cxxbridge1$craby_test_trigger_signal_object(it_);
   if (error$.ptr) {
     throw ::rust::impl<::rust::Error>::error(error$);
   }

@@ -118,14 +118,34 @@ impl CrabyTestSpec for CrabyTest {
 
     fn trigger_signal(&mut self) -> Void {
         self.emit(CrabyTestSignal::OnSignal);
-        
-        // 예제: Array<number> 타입으로 signal emit
+        self.emit(CrabyTestSignal::OnFinished);
+    }
+
+    fn trigger_signal_array_number(&mut self) -> Void {
         let numbers = vec![1.0, 2.0, 3.0, 4.0, 5.0];
         self.emit_array_number(CrabyTestSignal::OnSignal, &numbers);
-        
-        // 예제: Array<string> 타입으로 signal emit
+    }
+
+    fn trigger_signal_array_string(&mut self) -> Void {
         let strings: Vec<String> = vec!["hello".to_string(), "world".to_string(), "from".to_string(), "rust".to_string()];
         self.emit_array_string(CrabyTestSignal::OnSignal, &strings);
+    }
+
+    fn trigger_signal_object(&mut self) -> Void {
+        // JSON 문자열을 직접 생성하여 바이트로 변환
+        let json_str = r#"{"foo":"test_foo","bar":42.0,"baz":true,"sub":{"a":"test_sub_a","b":100.0,"c":false},"camel_case":1.0,"pascal_case":2.0,"snake_case":3.0}"#;
+        let json_bytes = json_str.as_bytes();
+        self.emit_object(CrabyTestSignal::OnSignal, json_bytes);
+    }
+
+    fn trigger_signal_array_object(&mut self) -> Void {
+        // 각 Object를 JSON 문자열로 직렬화하여 Vec<String>으로 전달
+        let json_strs: Vec<String> = vec![
+            r#"{"foo":"test_foo_1","bar":1.0,"baz":true}"#.to_string(),
+            r#"{"foo":"test_foo_2","bar":2.0,"baz":false}"#.to_string(),
+            r#"{"foo":"test_foo_3","bar":3.0,"baz":true}"#.to_string(),
+        ];
+        self.emit_array_object(CrabyTestSignal::OnSignal, &json_strs);
     }
 
     fn camel_method(&mut self) -> Void {

@@ -123,6 +123,18 @@ pub mod bridging {
         #[cxx_name = "triggerSignal"]
         fn craby_test_trigger_signal(it_: &mut CrabyTest) -> Result<()>;
 
+        #[cxx_name = "triggerSignalArrayNumber"]
+        fn craby_test_trigger_signal_array_number(it_: &mut CrabyTest) -> Result<()>;
+
+        #[cxx_name = "triggerSignalArrayObject"]
+        fn craby_test_trigger_signal_array_object(it_: &mut CrabyTest) -> Result<()>;
+
+        #[cxx_name = "triggerSignalArrayString"]
+        fn craby_test_trigger_signal_array_string(it_: &mut CrabyTest) -> Result<()>;
+
+        #[cxx_name = "triggerSignalObject"]
+        fn craby_test_trigger_signal_object(it_: &mut CrabyTest) -> Result<()>;
+
         #[cxx_name = "writeData"]
         fn craby_test_write_data(it_: &mut CrabyTest, value: &str) -> Result<bool>;
     }
@@ -136,6 +148,8 @@ pub mod bridging {
         fn emit(self: &SignalManager, id: usize, name: &str);
         fn emit_array_number(self: &SignalManager, id: usize, name: &str, arr: &[f64]);
         fn emit_array_string(self: &SignalManager, id: usize, name: &str, arr: &[&str]);
+        fn emit_array_object(self: &SignalManager, id: usize, name: &str, arr: &[&str]);
+        fn emit_object(self: &SignalManager, id: usize, name: &str, data: &[u8]);
         #[rust_name = "get_signal_manager"]
         fn getSignalManager() -> &'static SignalManager;
     }
@@ -287,6 +301,34 @@ fn craby_test_string_method(it_: &mut CrabyTest, arg: &str) -> Result<String, an
 fn craby_test_trigger_signal(it_: &mut CrabyTest) -> Result<(), anyhow::Error> {
     craby::catch_panic!({
         let ret = it_.trigger_signal();
+        ret
+    })
+}
+
+fn craby_test_trigger_signal_array_number(it_: &mut CrabyTest) -> Result<(), anyhow::Error> {
+    craby::catch_panic!({
+        let ret = it_.trigger_signal_array_number();
+        ret
+    })
+}
+
+fn craby_test_trigger_signal_array_object(it_: &mut CrabyTest) -> Result<(), anyhow::Error> {
+    craby::catch_panic!({
+        let ret = it_.trigger_signal_array_object();
+        ret
+    })
+}
+
+fn craby_test_trigger_signal_array_string(it_: &mut CrabyTest) -> Result<(), anyhow::Error> {
+    craby::catch_panic!({
+        let ret = it_.trigger_signal_array_string();
+        ret
+    })
+}
+
+fn craby_test_trigger_signal_object(it_: &mut CrabyTest) -> Result<(), anyhow::Error> {
+    craby::catch_panic!({
+        let ret = it_.trigger_signal_object();
         ret
     })
 }

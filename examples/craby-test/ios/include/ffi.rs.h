@@ -1133,6 +1133,14 @@ void snakeMethod(::craby::crabytest::bridging::CrabyTest &it_);
 
 void triggerSignal(::craby::crabytest::bridging::CrabyTest &it_);
 
+void triggerSignalArrayNumber(::craby::crabytest::bridging::CrabyTest &it_);
+
+void triggerSignalArrayObject(::craby::crabytest::bridging::CrabyTest &it_);
+
+void triggerSignalArrayString(::craby::crabytest::bridging::CrabyTest &it_);
+
+void triggerSignalObject(::craby::crabytest::bridging::CrabyTest &it_);
+
 bool writeData(::craby::crabytest::bridging::CrabyTest &it_, ::rust::Str value);
 } // namespace bridging
 } // namespace crabytest

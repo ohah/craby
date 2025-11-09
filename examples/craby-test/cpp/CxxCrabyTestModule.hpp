@@ -28,6 +28,10 @@ public:
 
   void emitArrayString(std::string name, const rust::Vec<rust::String>& arr);
 
+  void emitArrayObject(std::string name, const rust::Vec<rust::String>& arr);
+
+  void emitObject(std::string name, rust::Slice<const uint8_t> data);
+
   static facebook::jsi::Value
   arrayMethod(facebook::jsi::Runtime &rt,
       facebook::react::TurboModule &turboModule,
@@ -109,7 +113,32 @@ public:
       const facebook::jsi::Value args[], size_t count);
 
   static facebook::jsi::Value
+  triggerSignalArrayNumber(facebook::jsi::Runtime &rt,
+      facebook::react::TurboModule &turboModule,
+      const facebook::jsi::Value args[], size_t count);
+
+  static facebook::jsi::Value
+  triggerSignalArrayObject(facebook::jsi::Runtime &rt,
+      facebook::react::TurboModule &turboModule,
+      const facebook::jsi::Value args[], size_t count);
+
+  static facebook::jsi::Value
+  triggerSignalArrayString(facebook::jsi::Runtime &rt,
+      facebook::react::TurboModule &turboModule,
+      const facebook::jsi::Value args[], size_t count);
+
+  static facebook::jsi::Value
+  triggerSignalObject(facebook::jsi::Runtime &rt,
+      facebook::react::TurboModule &turboModule,
+      const facebook::jsi::Value args[], size_t count);
+
+  static facebook::jsi::Value
   writeData(facebook::jsi::Runtime &rt,
+      facebook::react::TurboModule &turboModule,
+      const facebook::jsi::Value args[], size_t count);
+
+  static facebook::jsi::Value
+  onFinished(facebook::jsi::Runtime &rt,
       facebook::react::TurboModule &turboModule,
       const facebook::jsi::Value args[], size_t count);
 

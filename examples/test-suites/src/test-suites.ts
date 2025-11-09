@@ -1,5 +1,5 @@
 import * as Module from 'craby-test';
-import { assert } from 'es-toolkit';
+import { assert, isEqual } from 'es-toolkit';
 import type { TestSuite } from './types';
 import { createTaskHandler, nextTick, toErrorObject } from './utils';
 
@@ -281,33 +281,25 @@ const TEST_SUITES: TestSuite[] = [
     label: 'Signal',
     description: 'Array<number> data',
     action: async () => {
-      const receivedData: (number[] | undefined)[] = [];
+      let receivedData: number[] | undefined = undefined;
       const task = createTaskHandler<object>();
 
       const cleanup = Module.CrabyTestModule.onSignal<number[]>((data) => {
         console.log('Array<number> data', data);
-        receivedData.push(data);
+        receivedData = data;  // ✅ 단순히 데이터 할당
       });
 
-      Module.CrabyTestModule.triggerSignal();
+      Module.CrabyTestModule.triggerSignalArrayNumber();
 
       cleanup();
 
       nextTick(() => {
-        // trigger_signal은 3개의 시그널을 emit: 기본, Array<number>, Array<string>
-        // Array<number>는 두 번째로 emit되므로 receivedData[1]에 있을 것
-        const arrayNumberData = receivedData.find(
-          (data) => Array.isArray(data) && typeof data[0] === 'number',
+        const expected = [1, 2, 3, 4, 5];
+        assert(
+          isEqual(receivedData, expected),
+          `Expected array [1,2,3,4,5], got ${JSON.stringify(receivedData)}`,
         );
-        if (arrayNumberData && arrayNumberData.length === 5) {
-          task.resolver({ receivedData: arrayNumberData });
-        } else {
-          task.rejector(
-            new Error(
-              `Expected array with 5 number elements, got ${JSON.stringify(receivedData)}`,
-            ),
-          );
-        }
+        task.resolver({ receivedData: receivedData });
       });
 
       return task;
@@ -317,37 +309,95 @@ const TEST_SUITES: TestSuite[] = [
     label: 'Signal',
     description: 'Array<string> data',
     action: async () => {
-      const receivedData: (string[] | undefined)[] = [];
+      let receivedData: string[] | undefined = undefined;
       const task = createTaskHandler<object>();
 
       const cleanup = Module.CrabyTestModule.onSignal<string[]>((data) => {
-        console.log('Array<string> data', data);
-        receivedData.push(data);
+        receivedData = data;  // ✅ 단순히 데이터 할당
       });
 
-      Module.CrabyTestModule.triggerSignal();
+      Module.CrabyTestModule.triggerSignalArrayString();
 
       cleanup();
 
       nextTick(() => {
-        // trigger_signal은 3개의 시그널을 emit: 기본, Array<number>, Array<string>
-        // Array<string>는 세 번째로 emit되므로 receivedData[2]에 있을 것
-        const arrayStringData = receivedData.find(
-          (data) => Array.isArray(data) && typeof data[0] === 'string',
+        const expected = ['hello', 'world', 'from', 'rust'];
+        assert(
+          isEqual(receivedData, expected),
+          `Expected array ['hello', 'world', 'from', 'rust'], got ${JSON.stringify(receivedData)}`,
         );
-        if (
-          arrayStringData &&
-          arrayStringData.length === 4 &&
-          arrayStringData[0] === 'hello'
-        ) {
-          task.resolver({ receivedData: arrayStringData });
-        } else {
-          task.rejector(
-            new Error(
-              `Expected array with 4 string elements, got ${JSON.stringify(receivedData)}`,
-            ),
-          );
-        }
+        task.resolver({ receivedData: receivedData });
+      });
+
+      return task;
+    },
+  },
+  {
+    label: 'Signal',
+    description: 'Object data',
+    action: async () => {
+      let receivedData: Module.TestObject | undefined = undefined;
+      const task = createTaskHandler<object>();
+
+      const cleanup = Module.CrabyTestModule.onSignal<Module.TestObject>((data) => {
+        receivedData = data;
+      });
+
+      Module.CrabyTestModule.triggerSignalObject();
+
+      cleanup();
+
+      nextTick(() => {
+        // JSON은 snake_case 필드명으로 직렬화됨
+        const expected = {
+          foo: 'test_foo',
+          bar: 42.0,
+          baz: true,
+          sub: {
+            a: 'test_sub_a',
+            b: 100.0,
+            c: false,
+          },
+          camel_case: 1.0,
+          pascal_case: 2.0,
+          snake_case: 3.0,
+        };
+        assert(
+          isEqual(receivedData, expected),
+          `Expected object ${JSON.stringify(expected)}, got ${JSON.stringify(receivedData)}`,
+        );
+        task.resolver({ receivedData: receivedData });
+      });
+
+      return task;
+    },
+  },
+  {
+    label: 'Signal',
+    description: 'Array<Object> data',
+    action: async () => {
+      let receivedData: Module.TestObject[] | undefined = undefined;
+      const task = createTaskHandler<object>();
+
+      const cleanup = Module.CrabyTestModule.onSignal<Module.TestObject[]>((data) => {
+        receivedData = data;
+      });
+
+      Module.CrabyTestModule.triggerSignalArrayObject();
+
+      cleanup();
+
+      nextTick(() => {
+        const expected = [
+          { foo: 'test_foo_1', bar: 1.0, baz: true },
+          { foo: 'test_foo_2', bar: 2.0, baz: false },
+          { foo: 'test_foo_3', bar: 3.0, baz: true },
+        ];
+        assert(
+          isEqual(receivedData, expected),
+          `Expected array ${JSON.stringify(expected)}, got ${JSON.stringify(receivedData)}`,
+        );
+        task.resolver({ receivedData: receivedData });
       });
 
       return task;

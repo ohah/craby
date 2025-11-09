@@ -31,6 +31,12 @@ CxxCrabyTestModule::CxxCrabyTestModule(
                                     },
                                     [this](const std::string& name, rust::Vec<rust::String> arr) {
                                       this->emitArrayString(name, arr);
+                                    },
+                                    [this](const std::string& name, rust::Vec<rust::String> arr) {
+                                      this->emitArrayObject(name, arr);
+                                    },
+                                    [this](const std::string& name, rust::Slice<const uint8_t> data) {
+                                      this->emitObject(name, data);
                                     });
   module_ = std::shared_ptr<craby::crabytest::bridging::CrabyTest>(
     craby::crabytest::bridging::createCrabyTest(
@@ -55,7 +61,12 @@ CxxCrabyTestModule::CxxCrabyTestModule(
   methodMap_["snake_method"] = MethodMetadata{0, &CxxCrabyTestModule::snakeMethod};
   methodMap_["stringMethod"] = MethodMetadata{1, &CxxCrabyTestModule::stringMethod};
   methodMap_["triggerSignal"] = MethodMetadata{0, &CxxCrabyTestModule::triggerSignal};
+  methodMap_["triggerSignalArrayNumber"] = MethodMetadata{0, &CxxCrabyTestModule::triggerSignalArrayNumber};
+  methodMap_["triggerSignalArrayObject"] = MethodMetadata{0, &CxxCrabyTestModule::triggerSignalArrayObject};
+  methodMap_["triggerSignalArrayString"] = MethodMetadata{0, &CxxCrabyTestModule::triggerSignalArrayString};
+  methodMap_["triggerSignalObject"] = MethodMetadata{0, &CxxCrabyTestModule::triggerSignalObject};
   methodMap_["writeData"] = MethodMetadata{1, &CxxCrabyTestModule::writeData};
+  methodMap_["onFinished"] = MethodMetadata{1, &CxxCrabyTestModule::onFinished};
   methodMap_["onSignal"] = MethodMetadata{1, &CxxCrabyTestModule::onSignal};
 }
 
@@ -188,6 +199,79 @@ void CxxCrabyTestModule::emitArrayString(std::string name, const rust::Vec<rust:
         // jsi::Array를 jsi::Value로 직접 변환 (jsi::Value는 jsi::Object를 받는 생성자가 있음)
         jsi::Value dataValue(std::move(jsArray));
         listener->call(rt, dataValue);
+      });
+    } catch (const std::exception& err) {
+      // Noop
+    }
+  }
+}
+
+// Array<Object> 타입 emit - Rust에서 Vec<String>으로 전달받아 각 문자열을 JSON.parse하여 배열로 변환
+void CxxCrabyTestModule::emitArrayObject(std::string name, const rust::Vec<rust::String>& arr) {
+  std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
+  {
+    std::lock_guard<std::mutex> lock(listenersMutex_);
+    auto it = listenersMap_.find(name);
+    if (it != listenersMap_.end()) {
+      for (auto &[_, listener] : it->second) {
+        listeners.push_back(listener);
+      }
+    }
+  }
+
+  // arr를 복사하여 람다에서 사용 (모든 리스너가 같은 복사본 공유)
+  rust::Vec<rust::String> arrCopy = arr;
+  for (auto& listener : listeners) {
+    try {
+      callInvoker_->invokeAsync([listener, arrCopy](jsi::Runtime &rt) {
+        // JSON 객체 가져오기
+        auto json = rt.global().getPropertyAsObject(rt, "JSON");
+        auto jsonParse = json.getPropertyAsFunction(rt, "parse");
+        
+        // 각 JSON 문자열을 파싱하여 배열로 만들기
+        auto jsArray = jsi::Array(rt, arrCopy.size());
+        for (size_t i = 0; i < arrCopy.size(); ++i) {
+          std::string jsonStr(arrCopy[i].data(), arrCopy[i].size());
+          jsi::Value jsonStrValue = react::bridging::toJs(rt, jsonStr);
+          auto jsonValue = jsonParse.call(rt, jsonStrValue.asString(rt));
+          jsArray.setValueAtIndex(rt, i, jsonValue);
+        }
+        
+        jsi::Value dataValue(std::move(jsArray));
+        listener->call(rt, dataValue);
+      });
+    } catch (const std::exception& err) {
+      // Noop
+    }
+  }
+}
+
+// Object 타입 emit - Rust에서 &[u8]로 전달받아 JSON으로 파싱하여 Object로 변환
+void CxxCrabyTestModule::emitObject(std::string name, rust::Slice<const uint8_t> data) {
+  std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
+  {
+    std::lock_guard<std::mutex> lock(listenersMutex_);
+    auto it = listenersMap_.find(name);
+    if (it != listenersMap_.end()) {
+      for (auto &[_, listener] : it->second) {
+        listeners.push_back(listener);
+      }
+    }
+  }
+
+  // data를 복사하여 람다에서 사용
+  std::vector<uint8_t> dataCopy(data.begin(), data.end());
+  for (auto& listener : listeners) {
+    try {
+      callInvoker_->invokeAsync([listener, dataCopy](jsi::Runtime &rt) {
+        // JSON 바이트를 문자열로 변환
+        std::string jsonStr(dataCopy.begin(), dataCopy.end());
+        // JSON 문자열을 jsi::Value로 파싱
+        auto json = rt.global().getPropertyAsObject(rt, "JSON");
+        auto jsonParse = json.getPropertyAsFunction(rt, "parse");
+        jsi::Value jsonStrValue = react::bridging::toJs(rt, jsonStr);
+        auto jsonValue = jsonParse.call(rt, jsonStrValue.asString(rt));
+        listener->call(rt, jsonValue);
       });
     } catch (const std::exception& err) {
       // Noop
@@ -585,6 +669,98 @@ jsi::Value CxxCrabyTestModule::triggerSignal(jsi::Runtime &rt,
   }
 }
 
+jsi::Value CxxCrabyTestModule::triggerSignalArrayNumber(jsi::Runtime &rt,
+                                react::TurboModule &turboModule,
+                                const jsi::Value args[],
+                                size_t count) {
+  auto &thisModule = static_cast<CxxCrabyTestModule &>(turboModule);
+  auto callInvoker = thisModule.callInvoker_;
+  auto it_ = thisModule.module_;
+
+  try {
+    if (0 != count) {
+      throw jsi::JSError(rt, "Expected 0 argument");
+    }
+
+    craby::crabytest::bridging::triggerSignalArrayNumber(*it_);
+
+    return jsi::Value::undefined();
+  } catch (const jsi::JSError &err) {
+    throw err;
+  } catch (const std::exception &err) {
+    throw jsi::JSError(rt, craby::crabytest::utils::errorMessage(err));
+  }
+}
+
+jsi::Value CxxCrabyTestModule::triggerSignalArrayObject(jsi::Runtime &rt,
+                                react::TurboModule &turboModule,
+                                const jsi::Value args[],
+                                size_t count) {
+  auto &thisModule = static_cast<CxxCrabyTestModule &>(turboModule);
+  auto callInvoker = thisModule.callInvoker_;
+  auto it_ = thisModule.module_;
+
+  try {
+    if (0 != count) {
+      throw jsi::JSError(rt, "Expected 0 argument");
+    }
+
+    craby::crabytest::bridging::triggerSignalArrayObject(*it_);
+
+    return jsi::Value::undefined();
+  } catch (const jsi::JSError &err) {
+    throw err;
+  } catch (const std::exception &err) {
+    throw jsi::JSError(rt, craby::crabytest::utils::errorMessage(err));
+  }
+}
+
+jsi::Value CxxCrabyTestModule::triggerSignalArrayString(jsi::Runtime &rt,
+                                react::TurboModule &turboModule,
+                                const jsi::Value args[],
+                                size_t count) {
+  auto &thisModule = static_cast<CxxCrabyTestModule &>(turboModule);
+  auto callInvoker = thisModule.callInvoker_;
+  auto it_ = thisModule.module_;
+
+  try {
+    if (0 != count) {
+      throw jsi::JSError(rt, "Expected 0 argument");
+    }
+
+    craby::crabytest::bridging::triggerSignalArrayString(*it_);
+
+    return jsi::Value::undefined();
+  } catch (const jsi::JSError &err) {
+    throw err;
+  } catch (const std::exception &err) {
+    throw jsi::JSError(rt, craby::crabytest::utils::errorMessage(err));
+  }
+}
+
+jsi::Value CxxCrabyTestModule::triggerSignalObject(jsi::Runtime &rt,
+                                react::TurboModule &turboModule,
+                                const jsi::Value args[],
+                                size_t count) {
+  auto &thisModule = static_cast<CxxCrabyTestModule &>(turboModule);
+  auto callInvoker = thisModule.callInvoker_;
+  auto it_ = thisModule.module_;
+
+  try {
+    if (0 != count) {
+      throw jsi::JSError(rt, "Expected 0 argument");
+    }
+
+    craby::crabytest::bridging::triggerSignalObject(*it_);
+
+    return jsi::Value::undefined();
+  } catch (const jsi::JSError &err) {
+    throw err;
+  } catch (const std::exception &err) {
+    throw jsi::JSError(rt, craby::crabytest::utils::errorMessage(err));
+  }
+}
+
 jsi::Value CxxCrabyTestModule::writeData(jsi::Runtime &rt,
                                 react::TurboModule &turboModule,
                                 const jsi::Value args[],
@@ -603,6 +779,61 @@ jsi::Value CxxCrabyTestModule::writeData(jsi::Runtime &rt,
     auto ret = craby::crabytest::bridging::writeData(*it_, arg0);
 
     return react::bridging::toJs(rt, ret);
+  } catch (const jsi::JSError &err) {
+    throw err;
+  } catch (const std::exception &err) {
+    throw jsi::JSError(rt, craby::crabytest::utils::errorMessage(err));
+  }
+}
+
+jsi::Value CxxCrabyTestModule::onFinished(jsi::Runtime &rt,
+                      react::TurboModule &turboModule,
+                      const jsi::Value args[],
+                      size_t count) {
+  auto &thisModule = static_cast<CxxCrabyTestModule &>(turboModule);
+  auto callInvoker = thisModule.callInvoker_;
+  auto it_ = thisModule.module_;
+
+  try {
+    if (1 != count) {
+      throw jsi::JSError(rt, "Expected 1 argument");
+    }
+
+    auto callback = args[0].asObject(rt).asFunction(rt);
+    auto callbackRef = std::make_shared<jsi::Function>(std::move(callback));
+    auto id = thisModule.nextListenerId_.fetch_add(1);
+    auto name = "onFinished";
+
+    if (thisModule.listenersMap_.find(name) == thisModule.listenersMap_.end()) {
+      thisModule.listenersMap_[name] = std::unordered_map<size_t, std::shared_ptr<facebook::jsi::Function>>();
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(thisModule.listenersMutex_);
+      thisModule.listenersMap_[name].emplace(id, callbackRef);
+    }
+
+    auto modulePtr = &thisModule;
+    auto cleanup = [modulePtr, name, id] {
+      std::lock_guard<std::mutex> lock(modulePtr->listenersMutex_);
+      auto eventMap = modulePtr->listenersMap_.find(name);
+      if (eventMap != modulePtr->listenersMap_.end()) {
+        auto it = eventMap->second.find(id);
+        if (it != eventMap->second.end()) {
+          eventMap->second.erase(it);
+        }
+      }
+      return jsi::Value::undefined();
+    };
+
+    return jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "cleanup"),
+      0,
+      [cleanup](jsi::Runtime& rt, const jsi::Value&, const jsi::Value*, size_t) -> jsi::Value {
+        return cleanup();
+      }
+    );
   } catch (const jsi::JSError &err) {
     throw err;
   } catch (const std::exception &err) {
