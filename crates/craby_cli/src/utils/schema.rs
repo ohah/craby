@@ -49,7 +49,7 @@ pub fn print_schema(schema: &Schema) -> Result<(), anyhow::Error> {
         );
     });
     if schema.enums.is_empty() {
-        println!("   {}", "(None)".dimmed());
+        println!("│  {}", "(None)".dimmed());
     }
 
     // Signals
