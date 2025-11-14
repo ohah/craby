@@ -7,7 +7,7 @@ import { Feature } from '@/components/feature';
 
 export default function HomePage() {
   return (
-    <div className="flex max-w-[1200px] flex-1 flex-col gap-4 p-4 xs:p-8 pt-16 text-center lg:pt-20">
+    <div className="flex max-w-[1200px] flex-1 flex-col gap-4 p-4 xs:p-8 pt-16 xs:pt-20 text-center">
       <section className="flex flex-row items-center justify-center max-[1100px]:flex-col max-[1100px]:gap-15">
         <div className="flex max-w-[600px] flex-col items-start justify-center whitespace-pre-wrap text-left max-[1100px]:items-center">
           <p className="w-fit bg-[linear-gradient(120deg,#82d7f7_10%,#387ca0)] bg-clip-text font-bold text-4xl text-transparent leading-12 tracking-tight antialiased max-[1100px]:text-center sm:text-5xl sm:leading-15 md:text-6xl md:leading-18">

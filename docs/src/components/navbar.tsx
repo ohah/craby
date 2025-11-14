@@ -87,8 +87,8 @@ function Navbar({ mode, links }: NavbarProps) {
   return (
     <nav
       className={cn(
-        'fixed top-0 z-10 flex h-[56px] w-full bg-fd-background transition-[border] duration-100 md:z-1000',
-        (mode === 'docs' || isScrolled) && 'border-fd-border border-b',
+        'fixed top-0 z-10 flex h-[56px] w-full bg-fd-background transition-shadow duration-300 md:z-1000',
+        (mode === 'docs' || isScrolled) && 'shadow-[0_1px_0_0_var(--color-fd-border)]',
       )}
     >
       <div
