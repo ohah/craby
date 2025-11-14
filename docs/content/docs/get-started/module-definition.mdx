@@ -7,7 +7,7 @@ This guide explains how to define your native module using TypeScript specs.
 ## Module Structure
 
 <Callout>
-  Craby scans the source directory specified in your [configuration](/guide/configuration) for spec files prefixed with `Native` (e.g., `NativeCalculator.ts`). Only files matching this pattern will be processed by the code generator.
+  Craby scans the source directory specified in your [configuration](/docs/get-started/configuration) for spec files prefixed with `Native` (e.g., `NativeCalculator.ts`). Only files matching this pattern will be processed by the code generator.
 </Callout>
 
 Every Craby module starts with a TypeScript spec that extends `NativeModule` interface:
@@ -136,4 +136,4 @@ impl MyModuleSpec for MyModule {
 
 ## Supported Types
 
-Craby supports various TypeScript types. see the [Types](/guide/types) guide.
+Craby supports various TypeScript types. see the [Types](/docs/guides/types) guide.
