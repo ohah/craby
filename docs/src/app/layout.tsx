@@ -1,6 +1,7 @@
 import { RootProvider } from 'fumadocs-ui/provider/next';
 import './global.css';
 import { Inter } from 'next/font/google';
+import { animateProgressCss } from '@/components/circular-progress';
 import SearchDialog from '@/components/search';
 
 const inter = Inter({
@@ -27,6 +28,7 @@ export default function Layout({ children }: LayoutProps<'/'>) {
         <link rel="icon" href="/favicon.ico" />
         <style>{`@import url('https://cdn.jsdelivr.net/gh/toss/tossface/dist/tossface.css');`}</style>
         <style>{`.tossface {  font-family: "Tossface", sans-serif; }`}</style>
+        <style>{animateProgressCss}</style>
         <script async src={GA_SRC} />
         <script>{gaScript}</script>
       </head>
