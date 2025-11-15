@@ -28,6 +28,7 @@ const handlers = [tokenTransitions];
 export function CodePreview() {
   const isHiddenRef = useRef<boolean>(false);
   const highlighted = useHighlight(DEMO_CODE);
+  const [timerStarted, setTimerStarted] = useState(false);
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -50,24 +51,27 @@ export function CodePreview() {
       setIndex((prev) => (prev === highlighted.length - 1 ? 0 : prev + 1));
     }, PREVIEW_INTERVAL);
 
+    setTimerStarted(true);
+
     return () => clearInterval(interval);
   }, [highlighted]);
 
   if (highlighted[index] == null) return null;
 
-  return <CodePreviewWindow code={highlighted[index]} lang={highlighted[index]?.lang} />;
+  return <CodePreviewWindow code={highlighted[index]} lang={highlighted[index]?.lang} ready={timerStarted} />;
 }
 
 export function CodePreviewFallback() {
-  return <CodePreviewWindow code={null} lang="typescript" />;
+  return <CodePreviewWindow code={null} lang="typescript" ready={false} />;
 }
 
 interface CodePreviewWindowProps {
   code: HighlightedCode | null;
   lang: string;
+  ready: boolean;
 }
 
-function CodePreviewWindow({ code, lang }: CodePreviewWindowProps) {
+function CodePreviewWindow({ code, lang, ready }: CodePreviewWindowProps) {
   return (
     <div className="flex w-full flex-col">
       <div className="flex justify-between overflow-hidden rounded-lg rounded-b-none bg-[#303030]">
@@ -91,9 +95,7 @@ function CodePreviewWindow({ code, lang }: CodePreviewWindowProps) {
             <p className="text-[10px] xs:text-sm">Rust</p>
           </div>
         </div>
-        <div className="mr-2 flex items-center justify-center md:mr-4">
-          <CircularProgress key={lang} />
-        </div>
+        <div className="mr-2 flex items-center justify-center md:mr-4">{ready && <CircularProgress key={lang} />}</div>
       </div>
       <div className="min-h-[15em] xs:min-h-[16em] rounded-lg rounded-t-none bg-[#1e1e1e] p-3 xs:p-4 text-left text-[11px] xs:text-[13px]">
         {code && (
