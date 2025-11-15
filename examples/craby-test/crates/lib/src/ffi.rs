@@ -10,22 +10,31 @@ use bridging::*;
 
 #[cxx::bridge(namespace = "craby::crabytest::bridging")]
 pub mod bridging {
+    #[derive(Clone)]
     struct NullableNumber {
         null: bool,
         val: f64,
     }
 
+    #[derive(Clone)]
     struct NullableString {
         null: bool,
         val: String,
     }
 
+    #[derive(Clone)]
     struct SubObject {
         a: NullableString,
         b: f64,
         c: bool,
     }
 
+    #[derive(Clone)]
+    struct MyModuleError {
+        reason: String,
+    }
+
+    #[derive(Clone)]
     struct TestObject {
         foo: String,
         bar: f64,
@@ -36,6 +45,12 @@ pub mod bridging {
         snake_case: f64,
     }
 
+    #[derive(Clone)]
+    struct ProgressEvent {
+        progress: f64,
+    }
+
+    #[derive(Clone)]
     struct NullableSubObject {
         null: bool,
         val: SubObject,
@@ -127,13 +142,21 @@ pub mod bridging {
         fn craby_test_write_data(it_: &mut CrabyTest, value: &str) -> Result<bool>;
     }
 
+    extern "Rust" {
+        type CrabyTestSignal;
+        fn get_on_error_payload(s: &CrabyTestSignal) -> MyModuleError;
+        fn get_on_progress_payload(s: &CrabyTestSignal) -> ProgressEvent;
+        unsafe fn drop_signal(signal: *mut CrabyTestSignal);
+    }
+
     #[namespace = "craby::crabytest::signals"]
     unsafe extern "C++" {
         include!("CrabySignals.h");
 
         type SignalManager;
 
-        fn emit(self: &SignalManager, id: usize, name: &str);
+        unsafe fn emit(self: &SignalManager, id: usize, name: &str, signal: *mut CrabyTestSignal);
+    
         #[rust_name = "get_signal_manager"]
         fn getSignalManager() -> &'static SignalManager;
     }
@@ -286,7 +309,7 @@ fn craby_test_trigger_signal(it_: &mut CrabyTest) -> Result<(), anyhow::Error> {
     craby::catch_panic!({
         let ret = it_.trigger_signal();
         ret
-    })
+    }).and_then(|r| r)
 }
 
 fn craby_test_write_data(it_: &mut CrabyTest, value: &str) -> Result<bool, anyhow::Error> {
@@ -294,4 +317,24 @@ fn craby_test_write_data(it_: &mut CrabyTest, value: &str) -> Result<bool, anyho
         let ret = it_.write_data(value);
         ret
     })
+}
+
+fn get_on_error_payload(s: &CrabyTestSignal) -> MyModuleError {
+    match s {
+        CrabyTestSignal::OnError(payload) => (*payload).clone(),
+        _ => panic!("Invalid signal type for get_on_error_payload"),
+    }
+}
+
+fn get_on_progress_payload(s: &CrabyTestSignal) -> ProgressEvent {
+    match s {
+        CrabyTestSignal::OnProgress(payload) => (*payload).clone(),
+        _ => panic!("Invalid signal type for get_on_progress_payload"),
+    }
+}
+
+unsafe fn drop_signal(signal: *mut CrabyTestSignal) {
+    if !signal.is_null() {
+        let _ = Box::from_raw(signal);
+    }
 }

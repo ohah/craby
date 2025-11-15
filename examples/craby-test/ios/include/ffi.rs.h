@@ -972,12 +972,15 @@ namespace craby {
       struct NullableNumber;
       struct NullableString;
       struct SubObject;
+      struct MyModuleError;
       struct TestObject;
+      struct ProgressEvent;
       struct NullableSubObject;
       enum class MyEnum : ::std::uint8_t;
       enum class SwitchState : ::std::uint8_t;
       struct Calculator;
       struct CrabyTest;
+      struct CrabyTestSignal;
     }
     namespace signals {
       using SignalManager = ::craby::crabytest::signals::SignalManager;
@@ -1019,6 +1022,15 @@ struct SubObject final {
 };
 #endif // CXXBRIDGE1_STRUCT_craby$crabytest$bridging$SubObject
 
+#ifndef CXXBRIDGE1_STRUCT_craby$crabytest$bridging$MyModuleError
+#define CXXBRIDGE1_STRUCT_craby$crabytest$bridging$MyModuleError
+struct MyModuleError final {
+  ::rust::String reason;
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_craby$crabytest$bridging$MyModuleError
+
 #ifndef CXXBRIDGE1_STRUCT_craby$crabytest$bridging$NullableSubObject
 #define CXXBRIDGE1_STRUCT_craby$crabytest$bridging$NullableSubObject
 struct NullableSubObject final {
@@ -1043,6 +1055,15 @@ struct TestObject final {
   using IsRelocatable = ::std::true_type;
 };
 #endif // CXXBRIDGE1_STRUCT_craby$crabytest$bridging$TestObject
+
+#ifndef CXXBRIDGE1_STRUCT_craby$crabytest$bridging$ProgressEvent
+#define CXXBRIDGE1_STRUCT_craby$crabytest$bridging$ProgressEvent
+struct ProgressEvent final {
+  double progress CXX_DEFAULT_VALUE(0);
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_craby$crabytest$bridging$ProgressEvent
 
 #ifndef CXXBRIDGE1_ENUM_craby$crabytest$bridging$MyEnum
 #define CXXBRIDGE1_ENUM_craby$crabytest$bridging$MyEnum
@@ -1089,6 +1110,20 @@ private:
 };
 #endif // CXXBRIDGE1_STRUCT_craby$crabytest$bridging$CrabyTest
 
+#ifndef CXXBRIDGE1_STRUCT_craby$crabytest$bridging$CrabyTestSignal
+#define CXXBRIDGE1_STRUCT_craby$crabytest$bridging$CrabyTestSignal
+struct CrabyTestSignal final : public ::rust::Opaque {
+  ~CrabyTestSignal() = delete;
+
+private:
+  friend ::rust::layout;
+  struct layout {
+    static ::std::size_t size() noexcept;
+    static ::std::size_t align() noexcept;
+  };
+};
+#endif // CXXBRIDGE1_STRUCT_craby$crabytest$bridging$CrabyTestSignal
+
 ::rust::Box<::craby::crabytest::bridging::Calculator> createCalculator(::std::size_t id, ::rust::Str data_path) noexcept;
 
 double add(::craby::crabytest::bridging::Calculator &it_, double a, double b);
@@ -1134,6 +1169,12 @@ void snakeMethod(::craby::crabytest::bridging::CrabyTest &it_);
 void triggerSignal(::craby::crabytest::bridging::CrabyTest &it_);
 
 bool writeData(::craby::crabytest::bridging::CrabyTest &it_, ::rust::Str value);
+
+::craby::crabytest::bridging::MyModuleError get_on_error_payload(::craby::crabytest::bridging::CrabyTestSignal const &s) noexcept;
+
+::craby::crabytest::bridging::ProgressEvent get_on_progress_payload(::craby::crabytest::bridging::CrabyTestSignal const &s) noexcept;
+
+void drop_signal(::craby::crabytest::bridging::CrabyTestSignal *signal) noexcept;
 } // namespace bridging
 } // namespace crabytest
 } // namespace craby

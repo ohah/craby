@@ -8,9 +8,20 @@
 
 namespace craby {
 namespace crabytest {
+namespace bridging {
+  struct CrabyTestSignal;
+}
+namespace modules {
+  class CxxCrabyTest;
+}
+}
+}
+
+namespace craby {
+namespace crabytest {
 namespace signals {
 
-using Delegate = std::function<void(const std::string& signalName)>;
+using Delegate = std::function<void(const std::string& signalName, void* signal)>;
 
 class SignalManager {
 public:
@@ -19,11 +30,11 @@ public:
     return instance;
   }
 
-  void emit(uintptr_t id, rust::Str name) const {
+  void emit(uintptr_t id, rust::Str name, craby::crabytest::bridging::CrabyTestSignal* signal) const {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = delegates_.find(id);
     if (it != delegates_.end()) {
-      it->second(std::string(name));
+      it->second(std::string(name), reinterpret_cast<void*>(signal));
     }
   }
 
