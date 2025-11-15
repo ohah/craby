@@ -116,8 +116,16 @@ impl CrabyTestSpec for CrabyTest {
         }
     }
 
-    fn trigger_signal(&mut self) -> Void {
+    fn trigger_signal(&mut self) -> Promise<Void> {
         self.emit(CrabyTestSignal::OnSignal);
+        for i in 0..10 {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            self.emit(CrabyTestSignal::OnProgress(ProgressEvent { progress: i as f64 }));
+        }
+        self.emit(CrabyTestSignal::OnError(MyModuleError {
+            reason: "Error".to_string(),
+        }));
+        promise::resolve(())
     }
 
     fn camel_method(&mut self) -> Void {

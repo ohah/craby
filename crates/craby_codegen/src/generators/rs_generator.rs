@@ -1,16 +1,13 @@
 use std::collections::BTreeMap;
 
 use craby_common::{
-    constants::{crate_dir, impl_mod_name, HASH_COMMENT_PREFIX},
-    utils::string::pascal_case,
+    constants::{HASH_COMMENT_PREFIX, crate_dir, impl_mod_name},
+    utils::string::{pascal_case, snake_case},
 };
 use indoc::formatdoc;
 
 use crate::{
-    generators::types::TemplateResult,
-    platform::rust::RsCxxBridge,
-    types::{CodegenContext, CxxNamespace, Schema},
-    utils::indent_str,
+    common::IntoCode, generators::types::TemplateResult, parser::types::{EnumTypeAnnotation, ObjectTypeAnnotation, TypeAnnotation}, platform::rust::RsCxxBridge, types::{CodegenContext, CxxNamespace, Schema}, utils::indent_str
 };
 
 use super::types::{Generator, GeneratorInvoker, Template};
@@ -79,6 +76,7 @@ impl RsTemplate {
         cxx_ns: &CxxNamespace,
         rs_cxx_bridges: &[RsCxxBridge],
         has_signals: bool,
+        schemas: &[Schema],
     ) -> String {
         let (impl_types, cxx_externs, struct_defs, enum_defs) = rs_cxx_bridges.iter().fold(
             (vec![], vec![], vec![], vec![]),
@@ -99,7 +97,63 @@ impl RsTemplate {
             }}"#,
         };
 
+        // Add signal enum and payload extraction functions
+        let signal_ffi_functions = if has_signals {
+            schemas.iter().flat_map(|schema| {
+                if schema.signals.is_empty() {
+                    return vec![];
+                }
+                
+                let signal_enum_name = format!("{}Signal", schema.module_name);
+                let mut functions = vec![format!("type {};", signal_enum_name)];
+                
+                // Generate payload extraction function for each signal
+                for signal in &schema.signals {
+                    if let Some(payload_type) = &signal.payload_type {
+                        let payload_type_name = payload_type.as_rs_type()
+                            .map(|t| t.into_code())
+                            .unwrap_or_else(|_| "String".to_string());
+                        let function_name = format!("get_{}_payload", snake_case(&signal.name));
+                        functions.push(format!(
+                            "fn {}(s: &{}) -> {};",
+                            function_name, signal_enum_name, payload_type_name
+                        ));
+                    }
+                }
+                
+                // Add drop_signal function for memory management
+                functions.push(format!(
+                    "unsafe fn drop_signal(signal: *mut {});",
+                    signal_enum_name
+                ));
+                
+                functions
+            }).collect::<Vec<_>>()
+        } else {
+            vec![]
+        };
+
+        let signal_ffi = if !signal_ffi_functions.is_empty() {
+            formatdoc! {
+                r#"
+                extern "Rust" {{
+                {signal_ffi_functions}
+                }}"#,
+                signal_ffi_functions = indent_str(&signal_ffi_functions.join("\n"), 4),
+            }
+        } else {
+            String::new()
+        };
+
         let cxx_signal_manager = if has_signals {
+            // Get signal enum type for each schema
+            let signal_enum_types: Vec<String> = schemas.iter()
+                .filter(|s| !s.signals.is_empty())
+                .map(|s| format!("{}Signal", s.module_name))
+                .collect();
+            
+            let signal_type = signal_enum_types.first().unwrap().clone();
+            
             formatdoc! {
                 r#"
                 #[namespace = "{cxx_ns}::signals"]
@@ -108,10 +162,12 @@ impl RsTemplate {
 
                     type SignalManager;
 
-                    fn emit(self: &SignalManager, id: usize, name: &str);
+                    unsafe fn emit(self: &SignalManager, id: usize, name: &str, signal: *mut {signal_type});
+                    
                     #[rust_name = "get_signal_manager"]
                     fn getSignalManager() -> &'static SignalManager;
                 }}"#,
+                signal_type = signal_type,
             }
         } else {
             String::new()
@@ -122,8 +178,13 @@ impl RsTemplate {
                 struct_defs.join("\n\n"),
                 enum_defs.join("\n\n"),
                 cxx_extern,
+                signal_ffi,
                 cxx_signal_manager,
             ]
+            .iter()
+            .filter(|s| !s.is_empty())
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
             .join("\n\n"),
             4,
         );
@@ -181,20 +242,95 @@ impl RsTemplate {
 
         let signal_enum = if !schema.signals.is_empty() {
             let signal_enum_name = format!("{}Signal", schema.module_name);
-            let (signal_members, pattern_matches): (Vec<String>, Vec<String>) = schema
+            let (signal_members, pattern_matches, pattern_matches_with_data) = schema
                 .signals
                 .iter()
                 .map(|signal| {
                     let member_name = pascal_case(&signal.name);
-                    let enum_member = format!("{member_name},");
+                    
+                    // Create enum variant based on payload type
+                    let enum_member = if let Some(payload_type) = &signal.payload_type {
+                        // Convert payload_type to Rust type
+                        match payload_type.as_rs_type() {
+                            Ok(rs_type) => format!("{member_name}({}),", rs_type.into_code()),
+                            Err(_) => format!("{member_name},"), // Create without payload if conversion fails
+                        }
+                    } else {
+                        format!("{member_name},")
+                    };
+                    
                     let enum_pattern_match = formatdoc! {
-                        r#"{signal_enum_name}::{member_name} => manager.emit(self.id(), "{raw}"),"#,
+                        r#"{signal_enum_name}::{member_name} => {{
+                            unsafe {{
+                                let _manager = crate::ffi::bridging::get_signal_manager();
+                                _manager.emit(self.id(), "{raw}", std::ptr::null_mut());
+                            }}
+                        }}"#,
                         raw = signal.name,
                     };
+                    
+                    // if there is a data payload
+                    let enum_pattern_match_with_data = if let Some(payload_type) = &signal.payload_type {
+                        let payload_type_name = payload_type.as_rs_type()
+                            .map(|t| t.into_code())
+                            .unwrap_or_else(|_| "String".to_string());
+                        
+                        // Create struct literal with fixed values per field when payload type is Object
+                        let payload_literal = match payload_type {
+                            TypeAnnotation::Object(ObjectTypeAnnotation { props, .. }) => {
+                                // Create struct literal format with default values for each field for object types
+                                let fields: Vec<String> = props.iter().map(|prop| {
+                                    let field_name = &prop.name;
+                                    let default_val = match &prop.type_annotation {
+                                        TypeAnnotation::String => "\"Error\".to_string()".to_string(),
+                                        TypeAnnotation::Number => "0.0".to_string(),
+                                        TypeAnnotation::Boolean => "false".to_string(),
+                                        TypeAnnotation::Nullable(_) => "None".to_string(),
+                                        TypeAnnotation::Object(ObjectTypeAnnotation { name, .. }) => {
+                                            format!("{}::default()", name)
+                                        }
+                                        TypeAnnotation::Enum(EnumTypeAnnotation { name, .. }) => {
+                                            format!("{}::default()", name)
+                                        }
+                                        _ => "String::default()".to_string(),
+                                    };
+                                    format!("{field_name}: {default_val}")
+                                }).collect();
+                                format!("{} {{ {} }}", payload_type_name, fields.join(", "))
+                            }
+                            TypeAnnotation::String => format!("{}.to_string()", "\"Error\""),
+                            TypeAnnotation::Number => "0.0".to_string(),
+                            TypeAnnotation::Boolean => "false".to_string(),
+                            _ => format!("{}::default()", payload_type_name),
+                        };
+                        
+                        formatdoc! {
+                            r#"{signal_enum_name}::{member_name}(data) => {{
+                                let signal = Box::new({signal_enum_name}::{member_name}(data));
+                                let signal_ptr = Box::into_raw(signal);
+                                let manager = crate::ffi::bridging::get_signal_manager();
+                                unsafe {{
+                                    manager.emit(self.id(), "{raw}", signal_ptr);
+                                }}
+                            }}"#,
+                            signal_enum_name = signal_enum_name,
+                            raw = signal.name,
+                        }
+                    } else {
+                        enum_pattern_match.clone()
+                    };
 
-                    (enum_member, enum_pattern_match)
+                    (enum_member, enum_pattern_match, enum_pattern_match_with_data)
                 })
-                .unzip();
+                .fold(
+                    (Vec::new(), Vec::new(), Vec::new()),
+                    |(mut members, mut patterns, mut patterns_with_data), (member, pattern, pattern_with_data)| {
+                        members.push(member);
+                        patterns.push(pattern);
+                        patterns_with_data.push(pattern_with_data);
+                        (members, patterns, patterns_with_data)
+                    },
+                );
 
             let signal_members_exprs = indent_str(&signal_members.join("\n"), 4);
             let signal_enum = formatdoc! {
@@ -204,7 +340,17 @@ impl RsTemplate {
                 }}"#,
             };
 
-            let pattern_match_stmts = indent_str(&pattern_matches.join("\n"), 8);
+            // Distinguish signals with and without payload_type
+            let has_payload_signals = schema.signals.iter().any(|s| s.payload_type.is_some());
+            
+            let pattern_match_stmts = if has_payload_signals {
+                // Handle both cases with and without data payload
+                // Actual implementation may be more complex
+                indent_str(&pattern_matches_with_data.join("\n"), 8)
+            } else {
+                indent_str(&pattern_matches.join("\n"), 8)
+            };
+            
             let emit_impl = formatdoc! {
                 r#"
                 fn emit(&self, signal_name: {signal_enum_name}) {{
@@ -370,9 +516,56 @@ impl RsTemplate {
         let has_signals = ctx.schemas.iter().any(|schema| !schema.signals.is_empty());
         let rs_cxx_bridges = self.rs_cxx_bridges(&ctx.schemas)?;
         let cxx_impls = self.rs_cxx_impl(&rs_cxx_bridges);
-        let cxx_externs = self.rs_cxx_extern(&cxx_ns, &rs_cxx_bridges, has_signals);
+        let cxx_externs = self.rs_cxx_extern(&cxx_ns, &rs_cxx_bridges, has_signals, &ctx.schemas);
+        
+        // Generate signal payload extraction function implementation
+        let signal_payload_impls = if has_signals {
+            ctx.schemas.iter().flat_map(|schema| {
+                if schema.signals.is_empty() {
+                    return vec![];
+                }
+                
+                let signal_enum_name = format!("{}Signal", schema.module_name);
+                let mut impls: Vec<String> = schema.signals.iter().filter_map(|signal| {
+                    signal.payload_type.as_ref().map(|payload_type| {
+                        let payload_type_name = payload_type.as_rs_type()
+                            .map(|t| t.into_code())
+                            .unwrap_or_else(|_| "String".to_string());
+                        let function_name = format!("get_{}_payload", snake_case(&signal.name));
+                        let signal_variant = pascal_case(&signal.name);
+                        
+                        formatdoc! {
+                            r#"
+                            fn {function_name}(s: &{signal_enum_name}) -> {payload_type_name} {{
+                                match s {{
+                                    {signal_enum_name}::{signal_variant}(payload) => (*payload).clone(),
+                                    _ => panic!("Invalid signal type for {function_name}"),
+                                }}
+                            }}"#,
+                        }
+                    })
+                }).collect();
+                
+                // Add drop_signal implementation
+                impls.push(formatdoc! {
+                    r#"
+                    unsafe fn drop_signal(signal: *mut {signal_enum_name}) {{
+                        if !signal.is_null() {{
+                            let _ = Box::from_raw(signal);
+                        }}
+                    }}"#,
+                    signal_enum_name = signal_enum_name,
+                });
+                
+                impls
+            }).collect::<Vec<_>>()
+        } else {
+            vec![]
+        };
+        
         let impl_mods = impl_mods.join("\n");
         let cxx_impls = cxx_impls.join("\n\n");
+        let signal_impls = signal_payload_impls.join("\n\n");
         let content = formatdoc! {
             r#"
             #[rustfmt::skip]
@@ -385,7 +578,9 @@ impl RsTemplate {
 
             {cxx_externs}
 
-            {cxx_impls}"#,
+            {cxx_impls}
+
+            {signal_impls}"#,
         };
 
         Ok(content)
