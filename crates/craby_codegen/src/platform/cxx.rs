@@ -335,7 +335,7 @@ impl Method {
                 let bind_args = bind_args.join(", ");
                 let ret_stmts = indent_str(&ret_stmts, 4);
                 let ret_type = if let TypeAnnotation::Void = &**resolve_type {
-                    "std::monostate".to_string()  // "void" 대신 "std::monostate" 사용
+                    "std::monostate".to_string()
                 } else {
                     resolve_type.as_cxx_type(cxx_ns)?
                 };
