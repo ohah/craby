@@ -266,8 +266,8 @@ impl RsTemplate {
                     let enum_pattern_match = formatdoc! {
                         r#"{signal_enum_name}::{member_name} => {{
                             unsafe {{
-                                let _manager = crate::ffi::bridging::get_signal_manager();
-                                _manager.emit(self.id(), "{raw}", std::ptr::null_mut());
+                                let manager = crate::ffi::bridging::get_signal_manager();
+                                manager.emit(self.id(), "{raw}", std::ptr::null_mut());
                             }}
                         }}"#,
                         raw = signal.name,

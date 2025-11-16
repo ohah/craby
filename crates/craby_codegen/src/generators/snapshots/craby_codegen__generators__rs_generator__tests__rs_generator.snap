@@ -228,8 +228,8 @@ pub trait CrabyTestSpec {
         match signal_name {
             CrabyTestSignal::OnSignal => {
                 unsafe {
-                    let _manager = crate::ffi::bridging::get_signal_manager();
-                    _manager.emit(self.id(), "onSignal", std::ptr::null_mut());
+                    let manager = crate::ffi::bridging::get_signal_manager();
+                    manager.emit(self.id(), "onSignal", std::ptr::null_mut());
                 }
             }
         }
