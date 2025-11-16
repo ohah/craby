@@ -74,68 +74,58 @@ void CxxCrabyTestModule::invalidate() {
 }
 
 void CxxCrabyTestModule::emit(std::string name, bridging::CrabyTestSignal* signal) {
+  std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
+  {
+    std::lock_guard<std::mutex> lock(listenersMutex_);
+    auto it = listenersMap_.find(name);
+    if (it != listenersMap_.end()) {
+      for (auto &[_, listener] : it->second) {
+        listeners.push_back(listener);
+      }
+    }
+  }
+
+  // Prepare payload: extract from signal or use undefined
+  auto payloadPtr = std::make_shared<facebook::jsi::Value>();
+  
   if (signal == nullptr) {
-    emit(name, facebook::jsi::Value::undefined());
+    *payloadPtr = facebook::jsi::Value::undefined();
+  } else {
+    // Use shared_ptr to manage signal lifetime across async callbacks
+    auto signalPtr = std::shared_ptr<bridging::CrabyTestSignal>(
+      signal,
+      [](bridging::CrabyTestSignal* ptr) {
+        // Use Rust FFI function to drop signal memory
+        if (ptr != nullptr) {
+          craby::crabytest::bridging::drop_signal(ptr);
+        }
+      }
+    );
+
+    // Extract payload using FFI function and convert to jsi::Value
+    // We'll need to capture signalPtr in the lambda
+    for (auto& listener : listeners) {
+      try {
+        callInvoker_->invokeAsync([listener, signalPtr, name](jsi::Runtime &rt) {
+          jsi::Value data = jsi::Value::undefined();
+          if (name == "onProgress") {
+            auto payload = craby::crabytest::bridging::get_on_progress_payload(*signalPtr);
+            data = react::bridging::toJs(rt, payload);
+          } else if (name == "onError") {
+            auto payload = craby::crabytest::bridging::get_on_error_payload(*signalPtr);
+            data = react::bridging::toJs(rt, payload);
+          }
+          listener->call(rt, data);
+        });
+      } catch (const std::exception& err) {
+        // Noop
+      }
+    }
     return;
   }
 
-  std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
-  {
-    std::lock_guard<std::mutex> lock(listenersMutex_);
-    auto it = listenersMap_.find(name);
-    if (it != listenersMap_.end()) {
-      for (auto &[_, listener] : it->second) {
-        listeners.push_back(listener);
-      }
-    }
-  }
-
-  // Use shared_ptr to manage signal lifetime across async callbacks
-  auto signalPtr = std::shared_ptr<bridging::CrabyTestSignal>(
-    signal,
-    [](bridging::CrabyTestSignal* ptr) {
-      // Use Rust FFI function to drop signal memory
-      if (ptr != nullptr) {
-        craby::crabytest::bridging::drop_signal(ptr);
-      }
-    }
-  );
-
-  for (auto& listener : listeners) {
-    try {
-      callInvoker_->invokeAsync([listener, signalPtr, name](jsi::Runtime &rt) {
-        // Extract payload using FFI function and convert to jsi::Value
-        jsi::Value data = jsi::Value::undefined();
-        if (name == "onProgress") {
-          auto payload = craby::crabytest::bridging::get_on_progress_payload(*signalPtr);
-          data = react::bridging::toJs(rt, payload);
-        } else if (name == "onError") {
-          auto payload = craby::crabytest::bridging::get_on_error_payload(*signalPtr);
-          data = react::bridging::toJs(rt, payload);
-        }
-        listener->call(rt, data);
-      });
-    } catch (const std::exception& err) {
-      // Noop
-    }
-  }
-}
-
-void CxxCrabyTestModule::emit(std::string name, facebook::jsi::Value payload) {
-  std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
-  {
-    std::lock_guard<std::mutex> lock(listenersMutex_);
-    auto it = listenersMap_.find(name);
-    if (it != listenersMap_.end()) {
-      for (auto &[_, listener] : it->second) {
-        listeners.push_back(listener);
-      }
-    }
-  }
-
-  // Wrap payload in shared_ptr to share across multiple listeners
-  auto payloadPtr = std::make_shared<facebook::jsi::Value>(std::move(payload));
-
+  // For nullptr signal, use undefined payload
+  *payloadPtr = facebook::jsi::Value::undefined();
   for (auto& listener : listeners) {
     try {
       callInvoker_->invokeAsync([listener, payloadPtr](jsi::Runtime &rt) {

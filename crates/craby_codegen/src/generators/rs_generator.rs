@@ -270,40 +270,7 @@ impl RsTemplate {
                     };
                     
                     // if there is a data payload
-                    let enum_pattern_match_with_data = if let Some(payload_type) = &signal.payload_type {
-                        let payload_type_name = payload_type.as_rs_type()
-                            .map(|t| t.into_code())
-                            .unwrap_or_else(|_| "String".to_string());
-                        
-                        // Create struct literal with fixed values per field when payload type is Object
-                        let payload_literal = match payload_type {
-                            TypeAnnotation::Object(ObjectTypeAnnotation { props, .. }) => {
-                                // Create struct literal format with default values for each field for object types
-                                let fields: Vec<String> = props.iter().map(|prop| {
-                                    let field_name = &prop.name;
-                                    let default_val = match &prop.type_annotation {
-                                        TypeAnnotation::String => "\"Error\".to_string()".to_string(),
-                                        TypeAnnotation::Number => "0.0".to_string(),
-                                        TypeAnnotation::Boolean => "false".to_string(),
-                                        TypeAnnotation::Nullable(_) => "None".to_string(),
-                                        TypeAnnotation::Object(ObjectTypeAnnotation { name, .. }) => {
-                                            format!("{}::default()", name)
-                                        }
-                                        TypeAnnotation::Enum(EnumTypeAnnotation { name, .. }) => {
-                                            format!("{}::default()", name)
-                                        }
-                                        _ => "String::default()".to_string(),
-                                    };
-                                    format!("{field_name}: {default_val}")
-                                }).collect();
-                                format!("{} {{ {} }}", payload_type_name, fields.join(", "))
-                            }
-                            TypeAnnotation::String => format!("{}.to_string()", "\"Error\""),
-                            TypeAnnotation::Number => "0.0".to_string(),
-                            TypeAnnotation::Boolean => "false".to_string(),
-                            _ => format!("{}::default()", payload_type_name),
-                        };
-                        
+                    let enum_pattern_match_with_data = if signal.payload_type.is_some() {
                         formatdoc! {
                             r#"{signal_enum_name}::{member_name}(data) => {{
                                 let signal = Box::new({signal_enum_name}::{member_name}(data));

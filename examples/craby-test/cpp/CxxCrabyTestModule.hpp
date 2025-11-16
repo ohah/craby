@@ -20,7 +20,6 @@ public:
   ~CxxCrabyTestModule();
 
   void invalidate();
-  void emit(std::string name, facebook::jsi::Value payload = facebook::jsi::Value::undefined());
   void emit(std::string name, bridging::CrabyTestSignal* signal);
 
   static facebook::jsi::Value

@@ -300,7 +300,7 @@ impl CxxTemplate {
             };
             
             method_defs.insert(0, if let Some(ref signal_enum) = signal_enum_name {
-              format!("void emit(std::string name, facebook::jsi::Value payload = facebook::jsi::Value::undefined());\nvoid emit(std::string name, bridging::{}* signal);", signal_enum)
+              format!("void emit(std::string name, bridging::{}* signal);", signal_enum)
             } else {
                 "void emit(std::string name);".to_string()
             });
@@ -308,10 +308,9 @@ impl CxxTemplate {
             method_impls.insert(
                 0,
                 if let Some(ref signal_enum) = signal_enum_name {
-                    // Implement both payload version and signal pointer version
                     formatdoc! {
                         r#"
-                        void {cxx_mod}::emit(std::string name, facebook::jsi::Value payload) {{
+                        void {cxx_mod}::emit(std::string name, bridging::{signal_enum}* signal) {{
                           std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
                           {{
                             std::lock_guard<std::mutex> lock(listenersMutex_);
@@ -323,9 +322,47 @@ impl CxxTemplate {
                             }}
                           }}
 
-                          // Wrap payload in shared_ptr to share across multiple listeners
-                          auto payloadPtr = std::make_shared<facebook::jsi::Value>(std::move(payload));
+                          // Prepare payload: extract from signal or use undefined
+                          auto payloadPtr = std::make_shared<facebook::jsi::Value>();
+                          
+                          if (signal == nullptr) {{
+                            *payloadPtr = facebook::jsi::Value::undefined();
+                          }} else {{
+                            // Use shared_ptr to manage signal lifetime across async callbacks
+                            auto signalPtr = std::shared_ptr<bridging::{signal_enum}>(
+                              signal,
+                              [](bridging::{signal_enum}* ptr) {{
+                                // Use Rust FFI function to drop signal memory
+                                if (ptr != nullptr) {{
+                                  craby::{project_ns}::bridging::drop_signal(ptr);
+                                }}
+                              }}
+                            );
 
+                            // Extract payload using FFI function and convert to jsi::Value
+                            // We'll need to capture signalPtr in the lambda
+                            for (auto& listener : listeners) {{
+                              try {{
+                                callInvoker_->invokeAsync([listener, signalPtr, name](jsi::Runtime &rt) {{
+                                  jsi::Value data = jsi::Value::undefined();
+                                  if (name == "onProgress") {{
+                                    auto payload = craby::{project_ns}::bridging::get_on_progress_payload(*signalPtr);
+                                    data = react::bridging::toJs(rt, payload);
+                                  }} else if (name == "onError") {{
+                                    auto payload = craby::{project_ns}::bridging::get_on_error_payload(*signalPtr);
+                                    data = react::bridging::toJs(rt, payload);
+                                  }}
+                                  listener->call(rt, data);
+                                }});
+                              }} catch (const std::exception& err) {{
+                                // Noop
+                              }}
+                            }}
+                            return;
+                          }}
+
+                          // For nullptr signal, use undefined payload
+                          *payloadPtr = facebook::jsi::Value::undefined();
                           for (auto& listener : listeners) {{
                             try {{
                               callInvoker_->invokeAsync([listener, payloadPtr](jsi::Runtime &rt) {{
@@ -342,6 +379,10 @@ impl CxxTemplate {
                             }}
                           }}
                         }}"#,
+                        signal_enum = signal_enum,
+                        project_ns = project_ns,
+                        cxx_mod = cxx_mod,
+                        cxx_ns = cxx_ns,
                     }
                 } else {
                     formatdoc! {
@@ -378,66 +419,6 @@ impl CxxTemplate {
                 }
             );
 
-            method_impls.insert(
-                0,
-                if let Some(ref signal_enum) = signal_enum_name {
-                    // Implement both payload version and signal pointer version
-                    formatdoc! {
-                        r#"
-                        void {cxx_mod}::emit(std::string name, bridging::{signal_enum}* signal) {{
-                          if (signal == nullptr) {{
-                            emit(name, facebook::jsi::Value::undefined());
-                            return;
-                          }}
-
-                          std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
-                          {{
-                            std::lock_guard<std::mutex> lock(listenersMutex_);
-                            auto it = listenersMap_.find(name);
-                            if (it != listenersMap_.end()) {{
-                              for (auto &[_, listener] : it->second) {{
-                                listeners.push_back(listener);
-                              }}
-                            }}
-                          }}
-
-                          // Use shared_ptr to manage signal lifetime across async callbacks
-                          auto signalPtr = std::shared_ptr<bridging::{signal_enum}>(
-                            signal,
-                            [](bridging::{signal_enum}* ptr) {{
-                              // Use Rust FFI function to drop signal memory
-                              if (ptr != nullptr) {{
-                                craby::{project_ns}::bridging::drop_signal(ptr);
-                              }}
-                            }}
-                          );
-
-                          for (auto& listener : listeners) {{
-                            try {{
-                              callInvoker_->invokeAsync([listener, signalPtr, name](jsi::Runtime &rt) {{
-                                // Extract payload using FFI function and convert to jsi::Value
-                                jsi::Value data = jsi::Value::undefined();
-                                if (name == "onProgress") {{
-                                  auto payload = craby::{project_ns}::bridging::get_on_progress_payload(*signalPtr);
-                                  data = react::bridging::toJs(rt, payload);
-                                }} else if (name == "onError") {{
-                                  auto payload = craby::{project_ns}::bridging::get_on_error_payload(*signalPtr);
-                                  data = react::bridging::toJs(rt, payload);
-                                }}
-                                listener->call(rt, data);
-                              }});
-                            }} catch (const std::exception& err) {{
-                              // Noop
-                            }}
-                          }}
-                        }}"#,
-                        signal_enum = signal_enum,
-                        project_ns = project_ns,
-                    }
-                } else {
-                    String::new()
-                }
-            );
 
             (register_stmt, unregister_stmt)
         } else {
