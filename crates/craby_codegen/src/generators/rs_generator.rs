@@ -7,7 +7,11 @@ use craby_common::{
 use indoc::formatdoc;
 
 use crate::{
-    common::IntoCode, generators::types::TemplateResult, parser::types::{EnumTypeAnnotation, ObjectTypeAnnotation, TypeAnnotation}, platform::rust::RsCxxBridge, types::{CodegenContext, CxxNamespace, Schema}, utils::indent_str
+    common::IntoCode,
+    generators::types::TemplateResult,
+    platform::rust::RsCxxBridge,
+    types::{CodegenContext, CxxNamespace, Schema},
+    utils::indent_str,
 };
 
 use super::types::{Generator, GeneratorInvoker, Template};

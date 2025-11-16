@@ -725,7 +725,7 @@ impl<'a> NativeModuleAnalyzer<'a> {
     fn try_into_schema(self) -> Result<Vec<Schema>, anyhow::Error> {
         let mut schemas = Vec::with_capacity(self.specs.len());
 
-        for (id, mut spec) in self.specs {
+        for (id, spec) in self.specs {
             let mut types = FxHashSet::default();
             let mut enums = FxHashSet::default();
             let module_name = self
