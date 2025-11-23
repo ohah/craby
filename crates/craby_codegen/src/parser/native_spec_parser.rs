@@ -465,7 +465,19 @@ impl<'a> NativeModuleAnalyzer<'a> {
                         .symbol_id();
 
                     if sym_id == self.mod_signal_sym_id {
-                        Ok(Signal { name: event_name })
+                        let payload_type = if let Some(type_args) = &type_ref.type_arguments {
+                            if let Some(first_arg) = type_args.params.first() {
+                                self.try_into_type_annotation(first_arg).ok()
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
+                        Ok(Signal { 
+                            name: event_name,
+                            payload_type,
+                        })
                     } else {
                         Err(error(INVALID_SPEC, sig.span))
                     }
@@ -713,7 +725,7 @@ impl<'a> NativeModuleAnalyzer<'a> {
     fn try_into_schema(self) -> Result<Vec<Schema>, anyhow::Error> {
         let mut schemas = Vec::with_capacity(self.specs.len());
 
-        for (id, mut spec) in self.specs {
+        for (id, spec) in self.specs {
             let mut types = FxHashSet::default();
             let mut enums = FxHashSet::default();
             let module_name = self
@@ -760,6 +772,29 @@ impl<'a> NativeModuleAnalyzer<'a> {
                 })
                 .collect::<Vec<Method>>();
 
+            let mut signals = spec
+                .signals
+                .into_iter()
+                .map(|mut signal| {
+                    if let Some(ref mut payload_type) = signal.payload_type {
+                        NativeModuleAnalyzer::resolve_refs(
+                            payload_type,
+                            self.scoping,
+                            &self.decls,
+                        );
+
+                        NativeModuleAnalyzer::collect_types(
+                            payload_type,
+                            self.scoping,
+                            &self.decls,
+                            &mut types,
+                            &mut enums,
+                        );
+                    }
+                    signal
+                })
+                .collect::<Vec<Signal>>();
+
             let mut aliases = types.into_iter().collect::<Vec<_>>();
             let mut enums = enums.into_iter().collect::<Vec<_>>();
 
@@ -767,14 +802,14 @@ impl<'a> NativeModuleAnalyzer<'a> {
             aliases.sort_by_key(|v| v.as_object().unwrap().name.to_lowercase());
             enums.sort_by_key(|v| v.as_enum().unwrap().name.to_lowercase());
             methods.sort_by_key(|v| v.name.to_lowercase());
-            spec.signals.sort_by_key(|v| v.name.to_lowercase());
+            signals.sort_by_key(|v| v.name.to_lowercase());
 
             schemas.push(Schema {
                 module_name: module_name.to_owned(),
                 aliases,
                 enums,
                 methods,
-                signals: spec.signals,
+                signals,
             });
         }
 

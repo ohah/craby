@@ -1,7 +1,7 @@
 import * as Module from 'craby-test';
-import { assert } from 'es-toolkit';
+import { assert, isEqual } from 'es-toolkit';
 import type { TestSuite } from './types';
-import { createTaskHandler, nextTick, toErrorObject } from './utils';
+import { createTaskHandler, nextTick, toErrorObject, waitForSignals } from './utils';
 
 const TEST_SUITES: TestSuite[] = [
   {
@@ -205,7 +205,7 @@ const TEST_SUITES: TestSuite[] = [
       });
 
       for (let i = 0; i < TRIGGER_COUNT; i++) {
-        Module.CrabyTestModule.triggerSignal();
+        await Module.CrabyTestModule.triggerSignal();
       }
 
       const cleanupResults = [
@@ -220,7 +220,7 @@ const TEST_SUITES: TestSuite[] = [
       );
 
       // Trigger signal after the cleanup is called
-      Module.CrabyTestModule.triggerSignal();
+      await Module.CrabyTestModule.triggerSignal();
 
       nextTick(() => {
         if (invoked === TRIGGER_COUNT) {
@@ -255,7 +255,9 @@ const TEST_SUITES: TestSuite[] = [
       };
 
       for (let i = 0; i < TRIGGER_COUNT; i++) {
-        Module.CrabyTestModule.triggerSignal();
+        await Module.CrabyTestModule.triggerSignal();
+
+        await waitForSignals(() => ({ current: invoked, expected: (i + 1) * LISTENER_COUNT }), 500);
       }
 
       cleanup();
@@ -263,14 +265,96 @@ const TEST_SUITES: TestSuite[] = [
       cleanup(); // noop
 
       // Trigger signal after the cleanup is called
-      Module.CrabyTestModule.triggerSignal();
+      await Module.CrabyTestModule.triggerSignal();
 
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      await new Promise<void>((resolve) => {
+        nextTick(() => {
+          const expected = TRIGGER_COUNT * LISTENER_COUNT;
+          if (invoked === expected) {
+            task.resolver({ invoked });
+          } else {
+            task.rejector(new Error(`Expected callback to be called ${expected} times, got ${invoked}`));
+          }
+          resolve();
+        });
+      });
+
+      return task;
+    },
+  },
+  {
+    label: 'Signal',
+    description: 'onProgress, onError',
+    action: async () => {
+      const task = createTaskHandler<object>();
+
+      let invoked = 0;
+      let errorInvoked = 0;
+      const assertProgressData = [
+        { progress: 0 },
+        { progress: 1 },
+        { progress: 2 },
+        { progress: 3 },
+        { progress: 4 },
+        { progress: 5 },
+        { progress: 6 },
+        { progress: 7 },
+        { progress: 8 },
+        { progress: 9 },
+      ];
+      const assertErrorData = [{ reason: 'Error' }];
+      const onProgressData: Module.ProgressEvent[] = [];
+      const onErrorData: Module.MyModuleError[] = [];
+
+      // Test that onProgress signal can be registered
+      const onProgress = Module.CrabyTestModule.onProgress((data) => {
+        onProgressData.push(data);
+      });
+
+      const onError = Module.CrabyTestModule.onError((data) => {
+        onErrorData.push(data);
+        ++errorInvoked;
+      });
+
+      const cleanup = Module.CrabyTestModule.onSignal(() => {
+        ++invoked;
+      });
+
+      await Module.CrabyTestModule.triggerSignal();
+
+      assert(typeof cleanup === 'function', '`onSignal` cleanup is not a function');
+      assert(typeof onProgress === 'function', '`onProgress` cleanup is not a function');
+      assert(typeof onError === 'function', '`onError` cleanup is not a function');
+
+      // Wait for async callbacks to complete
       nextTick(() => {
-        const expected = TRIGGER_COUNT * LISTENER_COUNT;
-        if (invoked === expected) {
-          task.resolver({ invoked });
+        const cleanupResult = cleanup();
+        assert(cleanupResult === undefined, '`cleanup` result is not undefined');
+
+        const onProgressResult = onProgress();
+        assert(onProgressResult === undefined, '`onProgress` cleanup result is not undefined');
+
+        const onErrorResult = onError();
+        assert(onErrorResult === undefined, '`onError` cleanup result is not undefined');
+
+        assert(isEqual(onProgressData, assertProgressData), '`onProgress` data is incorrect');
+        assert(isEqual(onErrorData, assertErrorData), '`onError` data is incorrect');
+
+        // Test multiple cleanups (should be noop)
+        cleanup();
+        onProgress();
+        onError();
+
+        if (invoked === 1 && errorInvoked === 1 && onProgressData.length === 10) {
+          task.resolver({ invoked, errorInvoked, onProgressCount: onProgressData.length });
         } else {
-          task.rejector(new Error(`Expected callback to be called ${expected} times, got ${invoked}`));
+          task.rejector(
+            new Error(
+              `Expected onSignal: 1, onProgress: 10, onError: 1, got onSignal: ${invoked}, onProgress: ${onProgressData.length}, onError: ${errorInvoked}`,
+            ),
+          );
         }
       });
 

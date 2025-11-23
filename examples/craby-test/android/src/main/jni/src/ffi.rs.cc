@@ -1043,12 +1043,15 @@ namespace craby {
       struct NullableNumber;
       struct NullableString;
       struct SubObject;
+      struct MyModuleError;
       struct TestObject;
+      struct ProgressEvent;
       struct NullableSubObject;
       enum class MyEnum : ::std::uint8_t;
       enum class SwitchState : ::std::uint8_t;
       struct Calculator;
       struct CrabyTest;
+      struct CrabyTestSignal;
     }
     namespace signals {
       using SignalManager = ::craby::crabytest::signals::SignalManager;
@@ -1090,6 +1093,15 @@ struct SubObject final {
 };
 #endif // CXXBRIDGE1_STRUCT_craby$crabytest$bridging$SubObject
 
+#ifndef CXXBRIDGE1_STRUCT_craby$crabytest$bridging$MyModuleError
+#define CXXBRIDGE1_STRUCT_craby$crabytest$bridging$MyModuleError
+struct MyModuleError final {
+  ::rust::String reason;
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_craby$crabytest$bridging$MyModuleError
+
 #ifndef CXXBRIDGE1_STRUCT_craby$crabytest$bridging$NullableSubObject
 #define CXXBRIDGE1_STRUCT_craby$crabytest$bridging$NullableSubObject
 struct NullableSubObject final {
@@ -1114,6 +1126,15 @@ struct TestObject final {
   using IsRelocatable = ::std::true_type;
 };
 #endif // CXXBRIDGE1_STRUCT_craby$crabytest$bridging$TestObject
+
+#ifndef CXXBRIDGE1_STRUCT_craby$crabytest$bridging$ProgressEvent
+#define CXXBRIDGE1_STRUCT_craby$crabytest$bridging$ProgressEvent
+struct ProgressEvent final {
+  double progress CXX_DEFAULT_VALUE(0);
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_craby$crabytest$bridging$ProgressEvent
 
 #ifndef CXXBRIDGE1_ENUM_craby$crabytest$bridging$MyEnum
 #define CXXBRIDGE1_ENUM_craby$crabytest$bridging$MyEnum
@@ -1159,6 +1180,20 @@ private:
   };
 };
 #endif // CXXBRIDGE1_STRUCT_craby$crabytest$bridging$CrabyTest
+
+#ifndef CXXBRIDGE1_STRUCT_craby$crabytest$bridging$CrabyTestSignal
+#define CXXBRIDGE1_STRUCT_craby$crabytest$bridging$CrabyTestSignal
+struct CrabyTestSignal final : public ::rust::Opaque {
+  ~CrabyTestSignal() = delete;
+
+private:
+  friend ::rust::layout;
+  struct layout {
+    static ::std::size_t size() noexcept;
+    static ::std::size_t align() noexcept;
+  };
+};
+#endif // CXXBRIDGE1_STRUCT_craby$crabytest$bridging$CrabyTestSignal
 
 extern "C" {
 ::std::size_t craby$crabytest$bridging$cxxbridge1$Calculator$operator$sizeof() noexcept;
@@ -1211,14 +1246,22 @@ extern "C" {
 ::rust::repr::PtrLen craby$crabytest$bridging$cxxbridge1$craby_test_trigger_signal(::craby::crabytest::bridging::CrabyTest &it_) noexcept;
 
 ::rust::repr::PtrLen craby$crabytest$bridging$cxxbridge1$craby_test_write_data(::craby::crabytest::bridging::CrabyTest &it_, ::rust::Str value, bool *return$) noexcept;
+::std::size_t craby$crabytest$bridging$cxxbridge1$CrabyTestSignal$operator$sizeof() noexcept;
+::std::size_t craby$crabytest$bridging$cxxbridge1$CrabyTestSignal$operator$alignof() noexcept;
+
+void craby$crabytest$bridging$cxxbridge1$get_on_error_payload(::craby::crabytest::bridging::CrabyTestSignal const &s, ::craby::crabytest::bridging::MyModuleError *return$) noexcept;
+
+void craby$crabytest$bridging$cxxbridge1$get_on_progress_payload(::craby::crabytest::bridging::CrabyTestSignal const &s, ::craby::crabytest::bridging::ProgressEvent *return$) noexcept;
+
+void craby$crabytest$bridging$cxxbridge1$drop_signal(::craby::crabytest::bridging::CrabyTestSignal *signal) noexcept;
 } // extern "C"
 } // namespace bridging
 
 namespace signals {
 extern "C" {
-void craby$crabytest$signals$cxxbridge1$SignalManager$emit(::craby::crabytest::signals::SignalManager const &self, ::std::size_t id, ::rust::Str name) noexcept {
-  void (::craby::crabytest::signals::SignalManager::*emit$)(::std::size_t, ::rust::Str) const = &::craby::crabytest::signals::SignalManager::emit;
-  (self.*emit$)(id, name);
+void craby$crabytest$signals$cxxbridge1$SignalManager$emit(::craby::crabytest::signals::SignalManager const &self, ::std::size_t id, ::rust::Str name, ::craby::crabytest::bridging::CrabyTestSignal *signal) noexcept {
+  void (::craby::crabytest::signals::SignalManager::*emit$)(::std::size_t, ::rust::Str, ::craby::crabytest::bridging::CrabyTestSignal *) const = &::craby::crabytest::signals::SignalManager::emit;
+  (self.*emit$)(id, name, signal);
 }
 
 ::craby::crabytest::signals::SignalManager const *craby$crabytest$signals$cxxbridge1$get_signal_manager() noexcept {
@@ -1433,6 +1476,30 @@ bool writeData(::craby::crabytest::bridging::CrabyTest &it_, ::rust::Str value) 
     throw ::rust::impl<::rust::Error>::error(error$);
   }
   return ::std::move(return$.value);
+}
+
+::std::size_t CrabyTestSignal::layout::size() noexcept {
+  return craby$crabytest$bridging$cxxbridge1$CrabyTestSignal$operator$sizeof();
+}
+
+::std::size_t CrabyTestSignal::layout::align() noexcept {
+  return craby$crabytest$bridging$cxxbridge1$CrabyTestSignal$operator$alignof();
+}
+
+::craby::crabytest::bridging::MyModuleError get_on_error_payload(::craby::crabytest::bridging::CrabyTestSignal const &s) noexcept {
+  ::rust::MaybeUninit<::craby::crabytest::bridging::MyModuleError> return$;
+  craby$crabytest$bridging$cxxbridge1$get_on_error_payload(s, &return$.value);
+  return ::std::move(return$.value);
+}
+
+::craby::crabytest::bridging::ProgressEvent get_on_progress_payload(::craby::crabytest::bridging::CrabyTestSignal const &s) noexcept {
+  ::rust::MaybeUninit<::craby::crabytest::bridging::ProgressEvent> return$;
+  craby$crabytest$bridging$cxxbridge1$get_on_progress_payload(s, &return$.value);
+  return ::std::move(return$.value);
+}
+
+void drop_signal(::craby::crabytest::bridging::CrabyTestSignal *signal) noexcept {
+  craby$crabytest$bridging$cxxbridge1$drop_signal(signal);
 }
 } // namespace bridging
 } // namespace crabytest

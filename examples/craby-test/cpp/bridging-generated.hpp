@@ -4,11 +4,23 @@
 #include "cxx.h"
 #include "ffi.rs.h"
 #include <react/bridging/Bridging.h>
+#include <variant>
 
 using namespace facebook;
 
 namespace facebook {
 namespace react {
+
+template <>
+struct Bridging<std::monostate> {
+  static std::monostate fromJs(jsi::Runtime& rt, const jsi::Value &value, std::shared_ptr<CallInvoker> callInvoker) {
+    return std::monostate{};
+  }
+
+  static jsi::Value toJs(jsi::Runtime& rt, const std::monostate& value) {
+    return jsi::Value::undefined();
+  }
+};
 
 template <>
 struct Bridging<rust::Str> {
@@ -117,6 +129,31 @@ struct Bridging<craby::crabytest::bridging::SwitchState> {
 };
 
 template <>
+struct Bridging<craby::crabytest::bridging::MyModuleError> {
+  static craby::crabytest::bridging::MyModuleError fromJs(jsi::Runtime &rt, const jsi::Value& value, std::shared_ptr<CallInvoker> callInvoker) {
+    auto obj = value.asObject(rt);
+    auto obj$reason = obj.getProperty(rt, "reason");
+
+    auto _obj$reason = react::bridging::fromJs<rust::String>(rt, obj$reason, callInvoker);
+
+    craby::crabytest::bridging::MyModuleError ret = {
+      _obj$reason
+    };
+
+    return ret;
+  }
+
+  static jsi::Value toJs(jsi::Runtime &rt, craby::crabytest::bridging::MyModuleError value) {
+    jsi::Object obj = jsi::Object(rt);
+    auto _obj$reason = react::bridging::toJs(rt, value.reason);
+
+    obj.setProperty(rt, "reason", _obj$reason);
+
+    return jsi::Value(rt, obj);
+  }
+};
+
+template <>
 struct Bridging<craby::crabytest::bridging::NullableString> {
   static craby::crabytest::bridging::NullableString fromJs(jsi::Runtime &rt, const jsi::Value& value, std::shared_ptr<CallInvoker> callInvoker) {
     if (value.isNull()) {
@@ -192,6 +229,31 @@ struct Bridging<craby::crabytest::bridging::NullableSubObject> {
     }
 
     return react::bridging::toJs(rt, value.val);
+  }
+};
+
+template <>
+struct Bridging<craby::crabytest::bridging::ProgressEvent> {
+  static craby::crabytest::bridging::ProgressEvent fromJs(jsi::Runtime &rt, const jsi::Value& value, std::shared_ptr<CallInvoker> callInvoker) {
+    auto obj = value.asObject(rt);
+    auto obj$progress = obj.getProperty(rt, "progress");
+
+    auto _obj$progress = react::bridging::fromJs<double>(rt, obj$progress, callInvoker);
+
+    craby::crabytest::bridging::ProgressEvent ret = {
+      _obj$progress
+    };
+
+    return ret;
+  }
+
+  static jsi::Value toJs(jsi::Runtime &rt, craby::crabytest::bridging::ProgressEvent value) {
+    jsi::Object obj = jsi::Object(rt);
+    auto _obj$progress = react::bridging::toJs(rt, value.progress);
+
+    obj.setProperty(rt, "progress", _obj$progress);
+
+    return jsi::Value(rt, obj);
   }
 };
 

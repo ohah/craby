@@ -348,6 +348,7 @@ expression: result
         signals: [
             Signal {
                 name: "onSignal",
+                payload_type: None,
             },
         ],
     },

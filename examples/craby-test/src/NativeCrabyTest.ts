@@ -17,6 +17,14 @@ export type SubObject = {
   c: boolean;
 };
 
+export interface ProgressEvent {
+  progress: number;
+}
+
+export interface MyModuleError {
+  reason: string;
+}
+
 export type MaybeNumber = number | null;
 
 export enum MyEnum {
@@ -52,7 +60,9 @@ export interface Spec extends NativeModule {
   snake_method(): void;
   // Signals
   onSignal: Signal;
-  triggerSignal(): void;
+  onProgress: Signal<ProgressEvent>;
+  onError: Signal<MyModuleError>;
+  triggerSignal(): Promise<void>;
 }
 
 export default NativeModuleRegistry.getEnforcing<Spec>('CrabyTest');

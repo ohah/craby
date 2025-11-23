@@ -186,14 +186,27 @@ impl CxxTemplate {
             .collect::<Vec<_>>();
 
         let (register_stmt, unregister_stmt) = if !schema.signals.is_empty() {
-            let register_stmt = formatdoc! {
-                r#"
-                uintptr_t id = reinterpret_cast<uintptr_t>(this);
-                auto& manager = {cxx_ns}::signals::SignalManager::getInstance();
-                manager.registerDelegate(id,
-                                         std::bind(&{cxx_mod}::emit,
-                                         this,
-                                         std::placeholders::_1));"#,
+            // Get signal enum type
+            let signal_enum_name = if !schema.signals.is_empty() {
+                Some(format!("{}Signal", schema.module_name))
+            } else {
+                None
+            };
+            
+            let register_stmt = if let Some(ref signal_enum) = signal_enum_name {
+                formatdoc! {
+                    r#"
+                    uintptr_t id = reinterpret_cast<uintptr_t>(this);
+                    auto& manager = {cxx_ns}::signals::SignalManager::getInstance();
+                    manager.registerDelegate(id,
+                      [this](const std::string& name, void* signal) {{
+                        this->emit(name, reinterpret_cast<bridging::{signal_enum}*>(signal));
+                      }}
+                    );"#,
+                    signal_enum = signal_enum,
+                }
+            } else {
+                String::new()
             };
 
             let unregister_stmt = formatdoc! {
@@ -280,36 +293,130 @@ impl CxxTemplate {
                 });
             }
 
-            method_defs.insert(0, "void emit(std::string name);".to_string());
+            let signal_enum_name = if !schema.signals.is_empty() {
+                Some(format!("{}Signal", schema.module_name))
+            } else {
+                None
+            };
+            
+            method_defs.insert(0, if let Some(ref signal_enum) = signal_enum_name {
+              format!("void emit(std::string name, bridging::{}* signal);", signal_enum)
+            } else {
+                "void emit(std::string name);".to_string()
+            });
 
             method_impls.insert(
                 0,
-                formatdoc! {
-                    r#"
-                    void {cxx_mod}::emit(std::string name) {{
-                      std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
-                      {{
-                        std::lock_guard<std::mutex> lock(listenersMutex_);
-                        auto it = listenersMap_.find(name);
-                        if (it != listenersMap_.end()) {{
-                          for (auto &[_, listener] : it->second) {{
-                            listeners.push_back(listener);
+                if let Some(ref signal_enum) = signal_enum_name {
+                    formatdoc! {
+                        r#"
+                        void {cxx_mod}::emit(std::string name, bridging::{signal_enum}* signal) {{
+                          std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
+                          {{
+                            std::lock_guard<std::mutex> lock(listenersMutex_);
+                            auto it = listenersMap_.find(name);
+                            if (it != listenersMap_.end()) {{
+                              for (auto &[_, listener] : it->second) {{
+                                listeners.push_back(listener);
+                              }}
+                            }}
                           }}
-                        }}
-                      }}
 
-                      for (auto& listener : listeners) {{
-                        try {{
-                          callInvoker_->invokeAsync([listener](jsi::Runtime &rt) {{
-                            listener->call(rt);
-                          }});
-                        }} catch (const std::exception& err) {{
-                          // Noop
-                        }}
-                      }}
-                    }}"#,
-                },
+                          // Prepare payload: extract from signal or use undefined
+                          auto payloadPtr = std::make_shared<facebook::jsi::Value>();
+                          
+                          if (signal == nullptr) {{
+                            *payloadPtr = facebook::jsi::Value::undefined();
+                          }} else {{
+                            // Use shared_ptr to manage signal lifetime across async callbacks
+                            auto signalPtr = std::shared_ptr<bridging::{signal_enum}>(
+                              signal,
+                              [](bridging::{signal_enum}* ptr) {{
+                                // Use Rust FFI function to drop signal memory
+                                if (ptr != nullptr) {{
+                                  craby::{project_ns}::bridging::drop_signal(ptr);
+                                }}
+                              }}
+                            );
+
+                            // Extract payload using FFI function and convert to jsi::Value
+                            // We'll need to capture signalPtr in the lambda
+                            for (auto& listener : listeners) {{
+                              try {{
+                                callInvoker_->invokeAsync([listener, signalPtr, name](jsi::Runtime &rt) {{
+                                  jsi::Value data = jsi::Value::undefined();
+                                  if (name == "onProgress") {{
+                                    auto payload = craby::{project_ns}::bridging::get_on_progress_payload(*signalPtr);
+                                    data = react::bridging::toJs(rt, payload);
+                                  }} else if (name == "onError") {{
+                                    auto payload = craby::{project_ns}::bridging::get_on_error_payload(*signalPtr);
+                                    data = react::bridging::toJs(rt, payload);
+                                  }}
+                                  listener->call(rt, data);
+                                }});
+                              }} catch (const std::exception& err) {{
+                                // Noop
+                              }}
+                            }}
+                            return;
+                          }}
+
+                          for (auto& listener : listeners) {{
+                            try {{
+                              callInvoker_->invokeAsync([listener, payloadPtr](jsi::Runtime &rt) {{
+                                try {{
+                                  listener->call(rt, *payloadPtr);
+                                }} catch (const jsi::JSError &err) {{
+                                  throw err;
+                                }} catch (const std::exception &err) {{
+                                  throw jsi::JSError(rt, {cxx_ns}::utils::errorMessage(err));
+                                }}
+                              }});
+                            }} catch (const std::exception& err) {{
+                              // Noop
+                            }}
+                          }}
+                        }}"#,
+                        signal_enum = signal_enum,
+                        project_ns = project_ns,
+                        cxx_mod = cxx_mod,
+                        cxx_ns = cxx_ns,
+                    }
+                } else {
+                    formatdoc! {
+                        r#"
+                        void {cxx_mod}::emit(std::string name) {{
+                          std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
+                          {{
+                            std::lock_guard<std::mutex> lock(listenersMutex_);
+                            auto it = listenersMap_.find(name);
+                            if (it != listenersMap_.end()) {{
+                              for (auto &[_, listener] : it->second) {{
+                                listeners.push_back(listener);
+                              }}
+                            }}
+                          }}
+
+                          for (auto& listener : listeners) {{
+                            try {{
+                              callInvoker_->invokeAsync([listener, payloadPtr](jsi::Runtime &rt) {{
+                                try {{
+                                  listener->call(rt, *payloadPtr);
+                                }} catch (const jsi::JSError &err) {{
+                                  throw err;
+                                }} catch (const std::exception &err) {{
+                                  throw jsi::JSError(rt, {cxx_ns}::utils::errorMessage(err));
+                                }}
+                              }});
+                            }} catch (const std::exception& err) {{
+                              // Noop
+                            }}
+                          }}
+                        }}"#,
+                    }
+                }
             );
+
 
             (register_stmt, unregister_stmt)
         } else {
@@ -482,11 +589,23 @@ impl CxxTemplate {
             #include "cxx.h"
             #include "ffi.rs.h"
             #include <react/bridging/Bridging.h>
+            #include <variant>
 
             using namespace facebook;
 
             namespace facebook {{
             namespace react {{
+
+            template <>
+            struct Bridging<std::monostate> {{
+              static std::monostate fromJs(jsi::Runtime& rt, const jsi::Value &value, std::shared_ptr<CallInvoker> callInvoker) {{
+                return std::monostate{{}};
+              }}
+
+              static jsi::Value toJs(jsi::Runtime& rt, const std::monostate& value) {{
+                return jsi::Value::undefined();
+              }}
+            }};
 
             template <>
             struct Bridging<rust::Str> {{
@@ -759,8 +878,6 @@ impl CxxTemplate {
     /// namespace mymodule {
     /// namespace signals {
     ///
-    /// using Delegate = std::function<void(const std::string& signalName)>;
-    ///
     /// class SignalManager {
     /// public:
     ///   static SignalManager& getInstance() {
@@ -796,65 +913,127 @@ impl CxxTemplate {
     /// } // namespace mymodule
     /// } // namespace craby
     /// ```
-    fn cxx_signals(&self, project_name: &str) -> Result<String, anyhow::Error> {
-        let flat_name = flat_case(project_name);
+    fn cxx_signals(&self, project_name: &str, schemas: &[Schema]) -> Result<String, anyhow::Error> {
+      let flat_name = flat_case(project_name);
+      
+      // Find schema with first signal
+      let signal_schema = schemas.iter().find(|s| !s.signals.is_empty());
+      let signal_enum = signal_schema.map(|s| format!("{}Signal", s.module_name));
+      let cxx_mod = signal_schema.map(|s| format!("Cxx{}", pascal_case(&s.module_name)));
+      
+      Ok(formatdoc! {
+          r#"
+          #pragma once
 
-        Ok(formatdoc! {
-            r#"
-            #pragma once
+          #include "rust/cxx.h"
+          #include <functional>
+          #include <memory>
+          #include <mutex>
+          #include <unordered_map>
 
-            #include "rust/cxx.h"
-            #include <functional>
-            #include <memory>
-            #include <mutex>
-            #include <unordered_map>
+          {forward_declarations}
 
-            namespace craby {{
-            namespace {flat_name} {{
-            namespace signals {{
+          namespace craby {{
+          namespace {flat_name} {{
+          namespace signals {{
 
-            using Delegate = std::function<void(const std::string& signalName)>;
+          {signal_delegate_typedef}
 
-            class SignalManager {{
-            public:
-              static SignalManager& getInstance() {{
-                static SignalManager instance;
-                return instance;
-              }}
-
-              void emit(uintptr_t id, rust::Str name) const {{
-                std::lock_guard<std::mutex> lock(mutex_);
-                auto it = delegates_.find(id);
-                if (it != delegates_.end()) {{
-                  it->second(std::string(name));
-                }}
-              }}
-
-              void registerDelegate(uintptr_t id, Delegate delegate) const {{
-                std::lock_guard<std::mutex> lock(mutex_);
-                delegates_.insert_or_assign(id, delegate);
-              }}
-
-              void unregisterDelegate(uintptr_t id) const {{
-                std::lock_guard<std::mutex> lock(mutex_);
-                delegates_.erase(id);
-              }}
-
-            private:
-              SignalManager() = default;
-              mutable std::unordered_map<uintptr_t, Delegate> delegates_;
-              mutable std::mutex mutex_;
-            }};
-
-            inline const SignalManager& getSignalManager() {{
-              return SignalManager::getInstance();
+          class SignalManager {{
+          public:
+            static SignalManager& getInstance() {{
+              static SignalManager instance;
+              return instance;
             }}
 
-            }} // namespace signals
-            }} // namespace {flat_name}
-            }} // namespace craby"#,
-        })
-    }
+            {emit_impl}
+
+            {register_delegate_impl}
+
+            void unregisterDelegate(uintptr_t id) const {{
+              std::lock_guard<std::mutex> lock(mutex_);
+              delegates_.erase(id);
+            }}
+
+          private:
+            SignalManager() = default;
+            {delegates_map}
+            mutable std::mutex mutex_;
+          }};
+
+          inline const SignalManager& getSignalManager() {{
+            return SignalManager::getInstance();
+          }}
+
+          }} // namespace signals
+          }} // namespace {flat_name}
+          }} // namespace craby"#,
+          flat_name = flat_name,
+          forward_declarations = if let (Some(ref enum_name), Some(ref mod_name)) = (&signal_enum, &cxx_mod) {
+              formatdoc! {
+                  r#"
+                  namespace craby {{
+                  namespace {flat_name} {{
+                  namespace bridging {{
+                    struct {enum_name};
+                  }}
+                  namespace modules {{
+                    class {mod_name};
+                  }}
+                  }}
+                  }}"#,
+                  enum_name = enum_name,
+                  mod_name = mod_name,
+                  flat_name = flat_name
+              }
+          } else {
+              String::new()
+          },
+          signal_delegate_typedef = if signal_enum.is_some() {
+              formatdoc! {
+                  r#"
+                  using Delegate = std::function<void(const std::string& signalName, void* signal)>;"#
+              }
+          } else {
+              String::new()
+          },
+          emit_impl = if let Some(ref enum_name) = signal_enum {
+              formatdoc! {
+                  r#"
+                  void emit(uintptr_t id, rust::Str name, craby::{flat_name}::bridging::{enum_name}* signal) const {{
+                      std::lock_guard<std::mutex> lock(mutex_);
+                      auto it = delegates_.find(id);
+                      if (it != delegates_.end()) {{
+                        it->second(std::string(name), reinterpret_cast<void*>(signal));
+                      }}
+                    }}"#,
+                  enum_name = enum_name,
+                  flat_name = flat_name
+              }
+          } else {
+              String::new()
+          },
+          register_delegate_impl = if signal_enum.is_some() {
+              formatdoc! {
+                  r#"
+                  void registerDelegate(uintptr_t id, Delegate delegate) const {{
+                      std::lock_guard<std::mutex> lock(mutex_);
+                      delegates_.insert_or_assign(id, delegate);
+                    }}"#
+              }
+          } else {
+              String::new()
+          },
+          delegates_map = if signal_enum.is_some() {
+              formatdoc! {
+                  r#"
+                  mutable std::unordered_map<uintptr_t, Delegate> delegates_;"#
+              }
+          } else {
+              String::new()
+          },
+      })
+  }
 }
 
 impl Template for CxxTemplate {
@@ -905,7 +1084,7 @@ impl Template for CxxTemplate {
                 if has_signals {
                     vec![TemplateResult {
                         path: cxx_bridge_include_dir(&ctx.root).join("CrabySignals.h"),
-                        content: self.cxx_signals(&ctx.project_name)?,
+                        content: self.cxx_signals(&ctx.project_name, &ctx.schemas)?,
                         overwrite: true,
                     }]
                 } else {

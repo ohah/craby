@@ -18,9 +18,10 @@ CxxCrabyTestModule::CxxCrabyTestModule(
   uintptr_t id = reinterpret_cast<uintptr_t>(this);
   auto& manager = craby::crabytest::signals::SignalManager::getInstance();
   manager.registerDelegate(id,
-                           std::bind(&CxxCrabyTestModule::emit,
-                           this,
-                           std::placeholders::_1));
+    [this](const std::string& name, void* signal) {
+      this->emit(name, reinterpret_cast<bridging::CrabyTestSignal*>(signal));
+    }
+  );
   callInvoker_ = std::move(jsInvoker);
   module_ = std::shared_ptr<craby::crabytest::bridging::CrabyTest>(
     craby::crabytest::bridging::createCrabyTest(
@@ -46,6 +47,8 @@ CxxCrabyTestModule::CxxCrabyTestModule(
   methodMap_["stringMethod"] = MethodMetadata{1, &CxxCrabyTestModule::stringMethod};
   methodMap_["triggerSignal"] = MethodMetadata{0, &CxxCrabyTestModule::triggerSignal};
   methodMap_["writeData"] = MethodMetadata{1, &CxxCrabyTestModule::writeData};
+  methodMap_["onError"] = MethodMetadata{1, &CxxCrabyTestModule::onError};
+  methodMap_["onProgress"] = MethodMetadata{1, &CxxCrabyTestModule::onProgress};
   methodMap_["onSignal"] = MethodMetadata{1, &CxxCrabyTestModule::onSignal};
 }
 
@@ -70,7 +73,7 @@ void CxxCrabyTestModule::invalidate() {
   threadPool_->shutdown();
 }
 
-void CxxCrabyTestModule::emit(std::string name) {
+void CxxCrabyTestModule::emit(std::string name, bridging::CrabyTestSignal* signal) {
   std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
   {
     std::lock_guard<std::mutex> lock(listenersMutex_);
@@ -82,10 +85,55 @@ void CxxCrabyTestModule::emit(std::string name) {
     }
   }
 
+  // Prepare payload: extract from signal or use undefined
+  auto payloadPtr = std::make_shared<facebook::jsi::Value>();
+  
+  if (signal == nullptr) {
+    *payloadPtr = facebook::jsi::Value::undefined();
+  } else {
+    // Use shared_ptr to manage signal lifetime across async callbacks
+    auto signalPtr = std::shared_ptr<bridging::CrabyTestSignal>(
+      signal,
+      [](bridging::CrabyTestSignal* ptr) {
+        // Use Rust FFI function to drop signal memory
+        if (ptr != nullptr) {
+          craby::crabytest::bridging::drop_signal(ptr);
+        }
+      }
+    );
+
+    // Extract payload using FFI function and convert to jsi::Value
+    // We'll need to capture signalPtr in the lambda
+    for (auto& listener : listeners) {
+      try {
+        callInvoker_->invokeAsync([listener, signalPtr, name](jsi::Runtime &rt) {
+          jsi::Value data = jsi::Value::undefined();
+          if (name == "onProgress") {
+            auto payload = craby::crabytest::bridging::get_on_progress_payload(*signalPtr);
+            data = react::bridging::toJs(rt, payload);
+          } else if (name == "onError") {
+            auto payload = craby::crabytest::bridging::get_on_error_payload(*signalPtr);
+            data = react::bridging::toJs(rt, payload);
+          }
+          listener->call(rt, data);
+        });
+      } catch (const std::exception& err) {
+        // Noop
+      }
+    }
+    return;
+  }
+
   for (auto& listener : listeners) {
     try {
-      callInvoker_->invokeAsync([listener](jsi::Runtime &rt) {
-        listener->call(rt);
+      callInvoker_->invokeAsync([listener, payloadPtr](jsi::Runtime &rt) {
+        try {
+          listener->call(rt, *payloadPtr);
+        } catch (const jsi::JSError &err) {
+          throw err;
+        } catch (const std::exception &err) {
+          throw jsi::JSError(rt, craby::crabytest::utils::errorMessage(err));
+        }
       });
     } catch (const std::exception& err) {
       // Noop
@@ -473,9 +521,20 @@ jsi::Value CxxCrabyTestModule::triggerSignal(jsi::Runtime &rt,
       throw jsi::JSError(rt, "Expected 0 argument");
     }
 
-    craby::crabytest::bridging::triggerSignal(*it_);
+    react::AsyncPromise<std::monostate> promise(rt, callInvoker);
 
-    return jsi::Value::undefined();
+    thisModule.threadPool_->enqueue([it_, promise]() mutable {
+      try {
+        craby::crabytest::bridging::triggerSignal(*it_);
+        promise.resolve(std::monostate{});
+      } catch (const jsi::JSError &err) {
+        promise.reject(err.getMessage());
+      } catch (const std::exception &err) {
+        promise.reject(craby::crabytest::utils::errorMessage(err));
+      }
+    });
+
+    return react::bridging::toJs(rt, promise);
   } catch (const jsi::JSError &err) {
     throw err;
   } catch (const std::exception &err) {
@@ -501,6 +560,116 @@ jsi::Value CxxCrabyTestModule::writeData(jsi::Runtime &rt,
     auto ret = craby::crabytest::bridging::writeData(*it_, arg0);
 
     return react::bridging::toJs(rt, ret);
+  } catch (const jsi::JSError &err) {
+    throw err;
+  } catch (const std::exception &err) {
+    throw jsi::JSError(rt, craby::crabytest::utils::errorMessage(err));
+  }
+}
+
+jsi::Value CxxCrabyTestModule::onError(jsi::Runtime &rt,
+                      react::TurboModule &turboModule,
+                      const jsi::Value args[],
+                      size_t count) {
+  auto &thisModule = static_cast<CxxCrabyTestModule &>(turboModule);
+  auto callInvoker = thisModule.callInvoker_;
+  auto it_ = thisModule.module_;
+
+  try {
+    if (1 != count) {
+      throw jsi::JSError(rt, "Expected 1 argument");
+    }
+
+    auto callback = args[0].asObject(rt).asFunction(rt);
+    auto callbackRef = std::make_shared<jsi::Function>(std::move(callback));
+    auto id = thisModule.nextListenerId_.fetch_add(1);
+    auto name = "onError";
+
+    if (thisModule.listenersMap_.find(name) == thisModule.listenersMap_.end()) {
+      thisModule.listenersMap_[name] = std::unordered_map<size_t, std::shared_ptr<facebook::jsi::Function>>();
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(thisModule.listenersMutex_);
+      thisModule.listenersMap_[name].emplace(id, callbackRef);
+    }
+
+    auto modulePtr = &thisModule;
+    auto cleanup = [modulePtr, name, id] {
+      std::lock_guard<std::mutex> lock(modulePtr->listenersMutex_);
+      auto eventMap = modulePtr->listenersMap_.find(name);
+      if (eventMap != modulePtr->listenersMap_.end()) {
+        auto it = eventMap->second.find(id);
+        if (it != eventMap->second.end()) {
+          eventMap->second.erase(it);
+        }
+      }
+      return jsi::Value::undefined();
+    };
+
+    return jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "cleanup"),
+      0,
+      [cleanup](jsi::Runtime& rt, const jsi::Value&, const jsi::Value*, size_t) -> jsi::Value {
+        return cleanup();
+      }
+    );
+  } catch (const jsi::JSError &err) {
+    throw err;
+  } catch (const std::exception &err) {
+    throw jsi::JSError(rt, craby::crabytest::utils::errorMessage(err));
+  }
+}
+
+jsi::Value CxxCrabyTestModule::onProgress(jsi::Runtime &rt,
+                      react::TurboModule &turboModule,
+                      const jsi::Value args[],
+                      size_t count) {
+  auto &thisModule = static_cast<CxxCrabyTestModule &>(turboModule);
+  auto callInvoker = thisModule.callInvoker_;
+  auto it_ = thisModule.module_;
+
+  try {
+    if (1 != count) {
+      throw jsi::JSError(rt, "Expected 1 argument");
+    }
+
+    auto callback = args[0].asObject(rt).asFunction(rt);
+    auto callbackRef = std::make_shared<jsi::Function>(std::move(callback));
+    auto id = thisModule.nextListenerId_.fetch_add(1);
+    auto name = "onProgress";
+
+    if (thisModule.listenersMap_.find(name) == thisModule.listenersMap_.end()) {
+      thisModule.listenersMap_[name] = std::unordered_map<size_t, std::shared_ptr<facebook::jsi::Function>>();
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(thisModule.listenersMutex_);
+      thisModule.listenersMap_[name].emplace(id, callbackRef);
+    }
+
+    auto modulePtr = &thisModule;
+    auto cleanup = [modulePtr, name, id] {
+      std::lock_guard<std::mutex> lock(modulePtr->listenersMutex_);
+      auto eventMap = modulePtr->listenersMap_.find(name);
+      if (eventMap != modulePtr->listenersMap_.end()) {
+        auto it = eventMap->second.find(id);
+        if (it != eventMap->second.end()) {
+          eventMap->second.erase(it);
+        }
+      }
+      return jsi::Value::undefined();
+    };
+
+    return jsi::Function::createFromHostFunction(
+      rt,
+      jsi::PropNameID::forAscii(rt, "cleanup"),
+      0,
+      [cleanup](jsi::Runtime& rt, const jsi::Value&, const jsi::Value*, size_t) -> jsi::Value {
+        return cleanup();
+      }
+    );
   } catch (const jsi::JSError &err) {
     throw err;
   } catch (const std::exception &err) {

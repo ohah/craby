@@ -705,6 +705,7 @@ pub mod template {
             let props = indent_str(&props.join("\n"), 4);
             let struct_def = formatdoc! {
                 r#"
+                #[derive(Clone)]
                 struct {name} {{
                 {props}
                 }}"#,
@@ -733,6 +734,7 @@ pub mod template {
 
                 let struct_def = formatdoc! {
                     r#"
+                    #[derive(Clone)]
                     struct {struct_type} {{
                         null: bool,
                         val: {base_type},

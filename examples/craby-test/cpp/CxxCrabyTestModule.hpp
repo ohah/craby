@@ -20,7 +20,7 @@ public:
   ~CxxCrabyTestModule();
 
   void invalidate();
-  void emit(std::string name);
+  void emit(std::string name, bridging::CrabyTestSignal* signal);
 
   static facebook::jsi::Value
   arrayMethod(facebook::jsi::Runtime &rt,
@@ -104,6 +104,16 @@ public:
 
   static facebook::jsi::Value
   writeData(facebook::jsi::Runtime &rt,
+      facebook::react::TurboModule &turboModule,
+      const facebook::jsi::Value args[], size_t count);
+
+  static facebook::jsi::Value
+  onError(facebook::jsi::Runtime &rt,
+      facebook::react::TurboModule &turboModule,
+      const facebook::jsi::Value args[], size_t count);
+
+  static facebook::jsi::Value
+  onProgress(facebook::jsi::Runtime &rt,
       facebook::react::TurboModule &turboModule,
       const facebook::jsi::Value args[], size_t count);
 

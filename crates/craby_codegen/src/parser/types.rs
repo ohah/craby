@@ -116,6 +116,7 @@ pub struct RefTypeAnnotation {
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 pub struct Signal {
     pub name: String,
+    pub payload_type: Option<TypeAnnotation>,
 }
 
 #[cfg(test)]

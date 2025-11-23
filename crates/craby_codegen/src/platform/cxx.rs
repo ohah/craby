@@ -64,6 +64,7 @@ impl TypeAnnotation {
     /// ```
     pub fn as_cxx_type(&self, cxx_ns: &CxxNamespace) -> Result<String, anyhow::Error> {
         let cxx_type = match self {
+            TypeAnnotation::Void => "void".to_string(),
             TypeAnnotation::Boolean => "bool".to_string(),
             TypeAnnotation::Number => "double".to_string(),
             TypeAnnotation::String => "rust::String".to_string(),
@@ -81,6 +82,7 @@ impl TypeAnnotation {
                     TypeAnnotation::Boolean => "NullableBoolean".to_string(),
                     TypeAnnotation::Number => "NullableNumber".to_string(),
                     TypeAnnotation::String => "NullableString".to_string(),
+                    TypeAnnotation::Void => "NullableVoid".to_string(), 
                     TypeAnnotation::Object(ObjectTypeAnnotation { name, .. }) => format!("Nullable{}", name),
                     TypeAnnotation::Enum(EnumTypeAnnotation { name, .. }) => format!("Nullable{}", name),
                     TypeAnnotation::Array(element_type) => match &**element_type {
@@ -318,7 +320,7 @@ impl Method {
                     formatdoc! {
                         r#"
                         {cxx_ns}::bridging::{fn_name}({fn_args});
-                        promise.resolve();
+                        promise.resolve(std::monostate{{}});
                         "#,
                     }
                 } else {
@@ -332,7 +334,11 @@ impl Method {
 
                 let bind_args = bind_args.join(", ");
                 let ret_stmts = indent_str(&ret_stmts, 4);
-                let ret_type = resolve_type.as_cxx_type(cxx_ns)?;
+                let ret_type = if let TypeAnnotation::Void = &**resolve_type {
+                    "std::monostate".to_string()
+                } else {
+                    resolve_type.as_cxx_type(cxx_ns)?
+                };
                 let ret = self.ret_type.as_cxx_to_js("promise")?.expr;
 
                 // Create a promise object and invoke the FFI function in a separate thread

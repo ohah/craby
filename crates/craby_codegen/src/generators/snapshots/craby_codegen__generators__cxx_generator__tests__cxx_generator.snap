@@ -22,9 +22,10 @@ CxxCrabyTestModule::CxxCrabyTestModule(
   uintptr_t id = reinterpret_cast<uintptr_t>(this);
   auto& manager = craby::testmodule::signals::SignalManager::getInstance();
   manager.registerDelegate(id,
-                           std::bind(&CxxCrabyTestModule::emit,
-                           this,
-                           std::placeholders::_1));
+    [this](const std::string& name, void* signal) {
+      this->emit(name, reinterpret_cast<bridging::CrabyTestSignal*>(signal));
+    }
+  );
   callInvoker_ = std::move(jsInvoker);
   module_ = std::shared_ptr<craby::testmodule::bridging::CrabyTest>(
     craby::testmodule::bridging::createCrabyTest(
@@ -68,7 +69,7 @@ void CxxCrabyTestModule::invalidate() {
   threadPool_->shutdown();
 }
 
-void CxxCrabyTestModule::emit(std::string name) {
+void CxxCrabyTestModule::emit(std::string name, bridging::CrabyTestSignal* signal) {
   std::vector<std::shared_ptr<facebook::jsi::Function>> listeners;
   {
     std::lock_guard<std::mutex> lock(listenersMutex_);
@@ -80,10 +81,55 @@ void CxxCrabyTestModule::emit(std::string name) {
     }
   }
 
+  // Prepare payload: extract from signal or use undefined
+  auto payloadPtr = std::make_shared<facebook::jsi::Value>();
+  
+  if (signal == nullptr) {
+    *payloadPtr = facebook::jsi::Value::undefined();
+  } else {
+    // Use shared_ptr to manage signal lifetime across async callbacks
+    auto signalPtr = std::shared_ptr<bridging::CrabyTestSignal>(
+      signal,
+      [](bridging::CrabyTestSignal* ptr) {
+        // Use Rust FFI function to drop signal memory
+        if (ptr != nullptr) {
+          craby::testmodule::bridging::drop_signal(ptr);
+        }
+      }
+    );
+
+    // Extract payload using FFI function and convert to jsi::Value
+    // We'll need to capture signalPtr in the lambda
+    for (auto& listener : listeners) {
+      try {
+        callInvoker_->invokeAsync([listener, signalPtr, name](jsi::Runtime &rt) {
+          jsi::Value data = jsi::Value::undefined();
+          if (name == "onProgress") {
+            auto payload = craby::testmodule::bridging::get_on_progress_payload(*signalPtr);
+            data = react::bridging::toJs(rt, payload);
+          } else if (name == "onError") {
+            auto payload = craby::testmodule::bridging::get_on_error_payload(*signalPtr);
+            data = react::bridging::toJs(rt, payload);
+          }
+          listener->call(rt, data);
+        });
+      } catch (const std::exception& err) {
+        // Noop
+      }
+    }
+    return;
+  }
+
   for (auto& listener : listeners) {
     try {
-      callInvoker_->invokeAsync([listener](jsi::Runtime &rt) {
-        listener->call(rt);
+      callInvoker_->invokeAsync([listener, payloadPtr](jsi::Runtime &rt) {
+        try {
+          listener->call(rt, *payloadPtr);
+        } catch (const jsi::JSError &err) {
+          throw err;
+        } catch (const std::exception &err) {
+          throw jsi::JSError(rt, craby::testmodule::utils::errorMessage(err));
+        }
       });
     } catch (const std::exception& err) {
       // Noop
@@ -452,7 +498,7 @@ public:
   ~CxxCrabyTestModule();
 
   void invalidate();
-  void emit(std::string name);
+  void emit(std::string name, bridging::CrabyTestSignal* signal);
 
   static facebook::jsi::Value
   arrayMethod(facebook::jsi::Runtime &rt,
@@ -537,11 +583,23 @@ protected:
 #include "cxx.h"
 #include "ffi.rs.h"
 #include <react/bridging/Bridging.h>
+#include <variant>
 
 using namespace facebook;
 
 namespace facebook {
 namespace react {
+
+template <>
+struct Bridging<std::monostate> {
+  static std::monostate fromJs(jsi::Runtime& rt, const jsi::Value &value, std::shared_ptr<CallInvoker> callInvoker) {
+    return std::monostate{};
+  }
+
+  static jsi::Value toJs(jsi::Runtime& rt, const std::monostate& value) {
+    return jsi::Value::undefined();
+  }
+};
 
 template <>
 struct Bridging<rust::Str> {
@@ -911,9 +969,20 @@ inline std::string errorMessage(const std::exception &err) {
 
 namespace craby {
 namespace testmodule {
+namespace bridging {
+  struct CrabyTestSignal;
+}
+namespace modules {
+  class CxxCrabyTest;
+}
+}
+}
+
+namespace craby {
+namespace testmodule {
 namespace signals {
 
-using Delegate = std::function<void(const std::string& signalName)>;
+using Delegate = std::function<void(const std::string& signalName, void* signal)>;
 
 class SignalManager {
 public:
@@ -922,11 +991,11 @@ public:
     return instance;
   }
 
-  void emit(uintptr_t id, rust::Str name) const {
+  void emit(uintptr_t id, rust::Str name, craby::testmodule::bridging::CrabyTestSignal* signal) const {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = delegates_.find(id);
     if (it != delegates_.end()) {
-      it->second(std::string(name));
+      it->second(std::string(name), reinterpret_cast<void*>(signal));
     }
   }
 

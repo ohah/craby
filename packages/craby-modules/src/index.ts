@@ -2,7 +2,7 @@ import { Platform, TurboModuleRegistry } from 'react-native';
 
 type NativeModule = {};
 
-type Signal = (handler: () => void) => () => void;
+type Signal<T = void> = (handler: (data: T) => void) => () => void;
 
 /**
  * Android JNI initialization workaround

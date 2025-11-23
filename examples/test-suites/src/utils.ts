@@ -37,3 +37,35 @@ export function createTaskHandler<T>() {
 export function nextTick(fn: () => void) {
   return setTimeout(fn, 0);
 }
+
+/**
+ * Waits for all expected signals to be emitted and processed.
+ * Polls until the expected count is reached or timeout occurs.
+ */
+export function waitForSignals(
+  checkFn: () => { current: number; expected: number },
+  timeout: number = 5000,
+  interval: number = 50,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+
+    const check = () => {
+      const { current, expected } = checkFn();
+
+      if (current >= expected) {
+        resolve();
+        return;
+      }
+
+      if (Date.now() - startTime > timeout) {
+        reject(new Error(`Timeout: Expected ${expected} signals, got ${current} after ${timeout}ms`));
+        return;
+      }
+
+      setTimeout(check, interval);
+    };
+
+    check();
+  });
+}
