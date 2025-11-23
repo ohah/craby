@@ -124,8 +124,6 @@ void CxxCrabyTestModule::emit(std::string name, bridging::CrabyTestSignal* signa
     return;
   }
 
-  // For nullptr signal, use undefined payload
-  *payloadPtr = facebook::jsi::Value::undefined();
   for (auto& listener : listeners) {
     try {
       callInvoker_->invokeAsync([listener, payloadPtr](jsi::Runtime &rt) {

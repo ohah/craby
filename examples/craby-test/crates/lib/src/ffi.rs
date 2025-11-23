@@ -335,6 +335,6 @@ fn get_on_progress_payload(s: &CrabyTestSignal) -> ProgressEvent {
 
 unsafe fn drop_signal(signal: *mut CrabyTestSignal) {
     if !signal.is_null() {
-        let _ = Box::from_raw(signal);
+        drop(Box::from_raw(signal));
     }
 }

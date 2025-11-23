@@ -23,7 +23,6 @@ pub trait CrabyTestSpec {
             CrabyTestSignal::OnError(data) => {
                 let signal = Box::new(CrabyTestSignal::OnError(data));
                 let signal_ptr = Box::into_raw(signal);
-                let manager = crate::ffi::bridging::get_signal_manager();
                 unsafe {
                     manager.emit(self.id(), "onError", signal_ptr);
                 }
@@ -31,15 +30,13 @@ pub trait CrabyTestSpec {
             CrabyTestSignal::OnProgress(data) => {
                 let signal = Box::new(CrabyTestSignal::OnProgress(data));
                 let signal_ptr = Box::into_raw(signal);
-                let manager = crate::ffi::bridging::get_signal_manager();
                 unsafe {
                     manager.emit(self.id(), "onProgress", signal_ptr);
                 }
             }
             CrabyTestSignal::OnSignal => {
                 unsafe {
-                    let _manager = crate::ffi::bridging::get_signal_manager();
-                    _manager.emit(self.id(), "onSignal", std::ptr::null_mut());
+                    manager.emit(self.id(), "onSignal", std::ptr::null_mut());
                 }
             }
         }
