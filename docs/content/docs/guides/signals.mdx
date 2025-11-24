@@ -11,25 +11,31 @@ Signals enable one-way communication from native Rust code to JavaScript, allowi
 Signals are simple event notifications sent from Rust to JavaScript. Unlike method calls that go from JS to native, signals flow in the opposite direction—from native to JS.
 
 - **One-way**: Rust → JavaScript only
-- **No data payload**: Signals don't carry data (they just trigger callbacks)
+- **Optional data payload**: Signals can optionally carry data payloads
 - **Multiple listeners**: JavaScript can register multiple listeners for the same signal
 - **Asynchronous**: Signals are emitted asynchronously and don't block native code
 
 ## Defining Signals
 
-Define signals as properties with the `Signal` type in your TypeScript spec:
+Define signals as properties with the `Signal` type in your TypeScript spec. Signals can optionally include a payload type:
 
 ```typescript title="NativeMyModule.ts"
 import type { NativeModule, Signal } from 'craby-modules';
 
+export interface ProgressEvent {
+  progress: number;
+}
+
+export interface MyModuleError {
+  reason: string;
+}
+
 export interface Spec extends NativeModule {
   // Signal definitions
   onStarted: Signal;
-  onFinished: Signal;
-
-  // Regular methods
-  startProcess(): void;
-  stopProcess(): void;
+  // Regular methods with payload
+  onProgress: Signal<ProgressEvent>;
+  onError: Signal<MyModuleError>;
 }
 ```
 
@@ -39,49 +45,60 @@ export interface Spec extends NativeModule {
 
 ## Emitting Signals from Rust
 
-In your Rust implementation, emit signals using the `emit()` method:
+In your Rust implementation, emit signals using the `emit()` method. For signals with payloads, pass the data as part of the enum variant:
 
 ```rust title="my_module_impl.rs"
 #[craby_module]
 impl MyModuleSpec for MyModule {
-    fn start_process(&mut self) -> Void {
-        // Emit a signal to notify JavaScript
+    fn start_process(&mut self) -> Promise<Void> {
+        // Emit a signal without payload
         self.emit(MyModuleSignal::OnStarted);
 
         // Do some work...
-        process_data();
 
-        // Emit completion signal
-        self.emit(MyModuleSignal::OnFinished);
+        for i in 0..10 {
+            process_data();
+
+            // Emit signal with payload
+            self.emit(MyModuleSignal::OnProgress(ProgressEvent { 
+                progress: i as f64 
+            }));
+        }
+
+        // Emit error signal with payload
+        self.emit(MyModuleSignal::OnError(MyModuleError {
+            reason: "Processing failed".to_string(),
+        }));
     }
 }
 ```
 
 ### Generated Signal Enum
 
-Craby automatically generates a Signal enum for your module:
+Craby automatically generates a Signal enum for your module. Signals with payloads include the data type in the enum variant:
 
 ```rust title="generated.rs"
 // Auto-generated
-pub enum ProcessModuleSignal {
-    OnStarted,
-    OnFinished,
+pub enum MyModuleSignal {
+    OnSignal,
+    OnProgress(ProgressEvent),
+    OnError(MyModuleError),
 }
 ```
 
 ## Subscribing to Signals in JavaScript
 
-Subscribe to signals to invoke with callback:
+Subscribe to signals by calling the signal property as a function with a callback. The callback receives the payload data (if any):
 
 ```typescript
 import { ProcessModule } from 'your-module';
 
 // Add a listener
-const cleanup = ProcessModule.onStarted(() => {
+const cleanup = MyModule.OnSignal(() => {
   console.log('Callback invoked from native!');
 });
 
-// Remove the listener when done
+// Remove the listeners when done
 cleanup();
 ```
 
@@ -90,12 +107,12 @@ cleanup();
 You can add multiple listeners to the same signal:
 
 ```typescript
-MyModule.onFinished(() => {
-  console.log('Finished 1');
+MyModule.onError((data) => {
+  console.log('Finished 1', data);
 });
 
-MyModule.onFinished(() => {
-  console.log('Finished 2');
+MyModule.onError((data) => {
+  console.log('onError', data.reason);
 });
 
 // Both listeners will be called when the signal is emitted
@@ -103,4 +120,4 @@ MyModule.onFinished(() => {
 
 ## Limitations
 
-Signals are designed to invoke JavaScript callback functions from Rust. As such, they cannot carry data payloads—they serve only as event notifications to trigger JavaScript callbacks.
+Signals are designed to invoke JavaScript callback functions from Rust. They can carry a data payload to pass information along with the event notification.

@@ -2,7 +2,7 @@ use std::fs;
 
 use craby_common::{
     constants::{cxx_bridge_include_dir, cxx_dir},
-    utils::string::{camel_case, flat_case, pascal_case},
+    utils::string::{camel_case, flat_case, pascal_case, snake_case},
 };
 use indoc::formatdoc;
 
@@ -305,6 +305,39 @@ impl CxxTemplate {
                 "void emit(std::string name);".to_string()
             });
 
+            // Generate payload extraction conditions dynamically
+            let payload_extraction = if signal_enum_name.is_some() {
+                let mut conditions: Vec<String> = schema.signals
+                    .iter()
+                    .filter_map(|signal| {
+                        signal.payload_type.as_ref().map(|_| {
+                            let function_name = format!("get_{}_payload", snake_case(&signal.name));
+                            formatdoc! {
+                                r#"else if (name == "{signal_name}") {{
+                                  auto payload = craby::{project_ns}::bridging::{function_name}(*signalPtr);
+                                  data = react::bridging::toJs(rt, payload);
+                                }}"#,
+                                signal_name = signal.name,
+                                function_name = function_name,
+                            }
+                        })
+                    })
+                    .collect();
+                
+                if !conditions.is_empty() {
+                    // Replace first "else if" with "if"
+                    if let Some(first) = conditions.first_mut() {
+                        *first = first.replace("else if", "if");
+                    }
+                    let joined = conditions.join(" ");
+                    indent_str(&joined, 10)
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
+
             method_impls.insert(
                 0,
                 if let Some(ref signal_enum) = signal_enum_name {
@@ -345,13 +378,7 @@ impl CxxTemplate {
                               try {{
                                 callInvoker_->invokeAsync([listener, signalPtr, name](jsi::Runtime &rt) {{
                                   jsi::Value data = jsi::Value::undefined();
-                                  if (name == "onProgress") {{
-                                    auto payload = craby::{project_ns}::bridging::get_on_progress_payload(*signalPtr);
-                                    data = react::bridging::toJs(rt, payload);
-                                  }} else if (name == "onError") {{
-                                    auto payload = craby::{project_ns}::bridging::get_on_error_payload(*signalPtr);
-                                    data = react::bridging::toJs(rt, payload);
-                                  }}
+                        {payload_extraction}
                                   listener->call(rt, data);
                                 }});
                               }} catch (const std::exception& err) {{
@@ -381,6 +408,7 @@ impl CxxTemplate {
                         project_ns = project_ns,
                         cxx_mod = cxx_mod,
                         cxx_ns = cxx_ns,
+                        payload_extraction = payload_extraction,
                     }
                 } else {
                     formatdoc! {

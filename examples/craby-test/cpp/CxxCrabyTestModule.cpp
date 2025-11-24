@@ -108,11 +108,11 @@ void CxxCrabyTestModule::emit(std::string name, bridging::CrabyTestSignal* signa
       try {
         callInvoker_->invokeAsync([listener, signalPtr, name](jsi::Runtime &rt) {
           jsi::Value data = jsi::Value::undefined();
-          if (name == "onProgress") {
-            auto payload = craby::crabytest::bridging::get_on_progress_payload(*signalPtr);
-            data = react::bridging::toJs(rt, payload);
-          } else if (name == "onError") {
+          if (name == "onError") {
             auto payload = craby::crabytest::bridging::get_on_error_payload(*signalPtr);
+            data = react::bridging::toJs(rt, payload);
+          } else if (name == "onProgress") {
+            auto payload = craby::crabytest::bridging::get_on_progress_payload(*signalPtr);
             data = react::bridging::toJs(rt, payload);
           }
           listener->call(rt, data);
