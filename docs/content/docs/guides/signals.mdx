@@ -33,6 +33,7 @@ export interface MyModuleError {
 export interface Spec extends NativeModule {
   // Signal definitions
   onStarted: Signal;
+  onFinished: Signal;
   // Regular methods with payload
   onProgress: Signal<ProgressEvent>;
   onError: Signal<MyModuleError>;
@@ -69,6 +70,8 @@ impl MyModuleSpec for MyModule {
         self.emit(MyModuleSignal::OnError(MyModuleError {
             reason: "Processing failed".to_string(),
         }));
+        
+        self.emit(MyModuleSignal::onFinished)
     }
 }
 ```
@@ -80,7 +83,8 @@ Craby automatically generates a Signal enum for your module. Signals with payloa
 ```rust title="generated.rs"
 // Auto-generated
 pub enum MyModuleSignal {
-    OnSignal,
+    onStarted,
+    onFinished,
     OnProgress(ProgressEvent),
     OnError(MyModuleError),
 }
@@ -94,7 +98,7 @@ Subscribe to signals by calling the signal property as a function with a callbac
 import { ProcessModule } from 'your-module';
 
 // Add a listener
-const cleanup = MyModule.OnSignal(() => {
+const cleanup = MyModule.onStarted(() => {
   console.log('Callback invoked from native!');
 });
 
@@ -108,11 +112,11 @@ You can add multiple listeners to the same signal:
 
 ```typescript
 MyModule.onError((data) => {
-  console.log('Finished 1', data);
+  console.log('onError 1', data.reason);
 });
 
 MyModule.onError((data) => {
-  console.log('onError', data.reason);
+  console.log('onError 2', data.reason);
 });
 
 // Both listeners will be called when the signal is emitted
